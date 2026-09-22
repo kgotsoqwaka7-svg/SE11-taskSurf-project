@@ -1,30 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 import 'firebase_options.dart';
+import 'screens/splashScreen.dart';
+import 'screens/homeScreen.dart';
+import 'screens/authScreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const MyApp());
+
+  runApp(const TaskSurfApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class TaskSurfApp extends StatelessWidget {
+  const TaskSurfApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Task Surf App',
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Youth Jobs Marketplace'),
-        ),
-        body: const Center(
-          child: Text('Firebase Successfully Connected!'),
-        ),
+      debugShowCheckedModeBanner: false,
+      title: 'TaskSurf',
+      theme: ThemeData(
+        useMaterial3: true,
+        fontFamily: 'Arial',
       ),
+      home: const SplashScreen(),
     );
   }
 }

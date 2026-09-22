@@ -56,7 +56,6 @@ class DefaultFirebaseOptions {
     projectId: 'tasksurf-se11',
     storageBucket: 'tasksurf-se11.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCjv2pp6BiL65nkobDwWNl2jvvcYxhIBDQ',
     appId: '1:67772600653:ios:70f943c6c5e22ff283a704',
@@ -65,7 +64,6 @@ class DefaultFirebaseOptions {
     storageBucket: 'tasksurf-se11.firebasestorage.app',
     iosBundleId: 'com.example.taskSurfSe11',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCjv2pp6BiL65nkobDwWNl2jvvcYxhIBDQ',
     appId: '1:67772600653:ios:70f943c6c5e22ff283a704',

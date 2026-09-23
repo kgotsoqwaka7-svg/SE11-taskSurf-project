@@ -1,6 +1,6 @@
 class TaskModel {
   final String taskID;
-  final String createrID;
+  final String creatorID;
   final String title;
   final String description;
   final String location;
@@ -11,7 +11,7 @@ class TaskModel {
 
   TaskModel({
     required this.taskID,
-    required this.createrID,
+    required this.creatorID,
     required this.title,
     required this.description,
     required this.location,

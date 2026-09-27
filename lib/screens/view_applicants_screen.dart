@@ -37,38 +37,7 @@ class _ViewApplicantsScreenState extends State<ViewApplicantsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ==========================================
-            // TEMPORARY DATABASE TEST BUTTON
-            // ==========================================
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-                onPressed: () async {
-                  try {
-                    await AuthenticationService().registerUser(
-                      name: 'Kgotso Test',
-                      email: 'kgotso.test@example.com',
-                      password: 'password123',
-                      role: 'Task Provider',
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Success! Check Firebase.')),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e')),
-                      );
-                    }
-                  }
-                },
-                child: const Text('TEST DATABASE CONNECTION', style: TextStyle(color: Colors.black)),
-              ),
-            ),
-            const SizedBox(height: 24),
+
 
             // ==========================================
             // APPLICANT UI

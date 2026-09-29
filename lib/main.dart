@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:task_surf_se11/screens/main_navigation.dart';
+import 'package:task_surf_se11/screens/task_provider_dashboard.dart';
 import 'firebase_options.dart';
-import 'screens/view_applicants_screen.dart'; // Add this import
+import 'screens/task_provider_dashboard.dart'; // Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +21,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Task Surf App',
       debugShowCheckedModeBanner: false, // Hides the debug banner
-      home: const ViewApplicantsScreen(), // Loads your new UI immediately
+      home: const MainNavigation(), // Loads your new UI immediately
     );
   }
 }

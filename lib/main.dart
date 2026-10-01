@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:task_surf_se11/screens/main_navigation.dart';
-import 'package:task_surf_se11/screens/task_provider_dashboard.dart';
 import 'firebase_options.dart';
-import 'screens/task_provider_dashboard.dart'; // Add this import
+import 'screens/authScreen.dart'; // Ensure this points to your teammate's auth screen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,8 +18,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Task Surf App',
-      debugShowCheckedModeBanner: false, // Hides the debug banner
-      home: const MainNavigation(), // Loads your new UI immediately
+      debugShowCheckedModeBanner: false,
+      home: const AuthScreen(), // App now launches to the Login/Register screen
     );
   }
 }

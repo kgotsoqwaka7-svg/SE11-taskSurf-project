@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'account_info.dart'; // 1. Added import for the new screen
+import '../screens/account_info.dart'; 
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -9,7 +9,7 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF5A75FF),
+        backgroundColor: const Color(0xFF1976D2), // Updated Team Color
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text('Settings', style: TextStyle(color: Colors.white)),
@@ -17,7 +17,6 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 16.0),
         children: [
-          // Account Information
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text('ACCOUNT', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
@@ -29,7 +28,6 @@ class SettingsScreen extends StatelessWidget {
               title: const Text('Account Information'),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
               onTap: () {
-                // 2. Navigates to the new edit screen when tapped
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const AccountInfoScreen()),
@@ -40,7 +38,6 @@ class SettingsScreen extends StatelessWidget {
           
           const SizedBox(height: 32),
 
-          // Log Out & Delete (Danger Zone text removed)
           Container(
             color: Colors.white,
             child: Column(

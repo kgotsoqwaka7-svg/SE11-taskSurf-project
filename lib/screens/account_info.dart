@@ -13,24 +13,24 @@ class AccountInfoScreen extends StatefulWidget {
 }
 
 class _AccountInfoScreenState extends State<AccountInfoScreen> {
-  // Text controllers (starts empty, gets filled by Firestore)
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _aboutController = TextEditingController(); // New
+  final TextEditingController _skillsController = TextEditingController(); // New
 
   File? _selectedImage;
   String _existingImageUrl = '';
-  bool _isLoading = true; // Shows a loading spinner while fetching data
+  bool _isLoading = true;
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    _loadUserData(); // Fetch the real data when the screen opens
+    _loadUserData();
   }
 
-  // Fetch the logged-in user's data from Firestore
   Future<void> _loadUserData() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -43,6 +43,8 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             _emailController.text = data['email'] ?? user.email ?? '';
             _phoneController.text = data['phone'] ?? '';
             _locationController.text = data['location'] ?? '';
+            _aboutController.text = data['aboutMe'] ?? ''; // Fetch bio
+            _skillsController.text = data['skills'] ?? ''; // Fetch skills
             _existingImageUrl = data['profileImageUrl'] ?? '';
             _isLoading = false;
           });
@@ -68,14 +70,13 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF5A75FF),
+        backgroundColor: const Color(0xFF1976D2), // Updated Team Color
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text('Edit Account', style: TextStyle(color: Colors.white)),
       ),
-      // Show a loading circle until the data is fetched
       body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFF5A75FF)))
+        ? const Center(child: CircularProgressIndicator(color: Color(0xFF1976D2)))
         : SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -88,9 +89,6 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
                   CircleAvatar(
                     radius: 50,
                     backgroundColor: Colors.grey.shade200,
-                    // 1. If they picked a new image, show it.
-                    // 2. Otherwise, if they have an existing image, show it.
-                    // 3. Otherwise, show the blank placeholder.
                     backgroundImage: _selectedImage != null 
                         ? FileImage(_selectedImage!) as ImageProvider
                         : _existingImageUrl.isNotEmpty
@@ -100,7 +98,7 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: const BoxDecoration(
-                      color: Color(0xFF5A75FF),
+                      color: Color(0xFF1976D2),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
@@ -110,25 +108,23 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             ),
             const SizedBox(height: 32),
             
+            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder())),
+            const SizedBox(height: 16),
+            TextField(controller: _emailController, decoration: const InputDecoration(labelText: 'Email Address', border: OutlineInputBorder()), readOnly: true),
+            const SizedBox(height: 16),
+            TextField(controller: _phoneController, decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder())),
+            const SizedBox(height: 16),
+            TextField(controller: _locationController, decoration: const InputDecoration(labelText: 'Location', border: OutlineInputBorder())),
+            const SizedBox(height: 16),
             TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder()),
+              controller: _aboutController, 
+              maxLines: 3, 
+              decoration: const InputDecoration(labelText: 'About Me', border: OutlineInputBorder(), hintText: 'Write a short bio...')
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email Address', border: OutlineInputBorder()),
-              readOnly: true, // Usually, you don't let them change the auth email here
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _phoneController,
-              decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _locationController,
-              decoration: const InputDecoration(labelText: 'Location', border: OutlineInputBorder()),
+              controller: _skillsController, 
+              decoration: const InputDecoration(labelText: 'Skills', border: OutlineInputBorder(), hintText: 'e.g. Cleaning, Painting, Carpentry')
             ),
             const SizedBox(height: 32),
 
@@ -137,40 +133,32 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
               height: 50,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5A75FF),
+                  backgroundColor: const Color(0xFF1976D2),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () async {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Saving profile...')),
-                  );
-
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saving profile...')));
                   String userID = FirebaseAuth.instance.currentUser!.uid;
 
-                  // Upload new image if they selected one
                   if (_selectedImage != null) {
                     try {
-                      AuthenticationService authService = AuthenticationService();
-                      await authService.uploadProfilePicture(userID, _selectedImage!);
+                      await AuthenticationService().uploadProfilePicture(userID, _selectedImage!);
                     } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
-                      }
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
                       return;
                     }
                   }
 
-                  // Save the typed text
                   try {
                     await FirebaseFirestore.instance.collection('Users').doc(userID).update({
                       'name': _nameController.text.trim(),
                       'phone': _phoneController.text.trim(),
                       'location': _locationController.text.trim(),
+                      'aboutMe': _aboutController.text.trim(),
+                      'skills': _skillsController.text.trim(),
                     });
                   } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save info: $e')));
-                    }
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save info: $e')));
                     return;
                   }
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'task_provider_dashboard.dart';
-import '../screens/user_profile.dart';
+import '../screens/user_profile.dart'; // Ensure these paths match your structure
 import '../screens/settings.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -24,26 +24,41 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_currentIndex], // Shows the active screen
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
+      // Upgraded to NavigationBar to match your teammate's UI exactly
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
           setState(() {
             _currentIndex = index; // Changes the tab when clicked
           });
         },
-        selectedItemColor: const Color(0xFF5A75FF), // Your theme blue
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
+        backgroundColor: Colors.white,
+        elevation: 5,
+        indicatorColor: const Color(0xFFE3F2FD), // Teammate's light blue bubble
+        height: 70,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(
+              Icons.dashboard_rounded,
+              color: Color(0xFF1976D2), // Teammate's primary dark blue
+            ),
             label: 'Dashboard',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(
+              Icons.person_rounded,
+              color: Color(0xFF1976D2),
+            ),
             label: 'Profile',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(
+              Icons.settings_rounded,
+              color: Color(0xFF1976D2),
+            ),
             label: 'Settings',
           ),
         ],

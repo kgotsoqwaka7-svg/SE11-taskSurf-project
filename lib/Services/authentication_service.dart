@@ -6,9 +6,23 @@ import 'package:firebase_storage/firebase_storage.dart';
 class AuthenticationService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance; // Added Storage Instance
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  //Creating the account and saving profile data
+  // From Teammate's Code
+  User? get currentUser => _auth.currentUser;
+
+  // From Teammate's Code
+  Future<UserCredential> login({
+    required String email,
+    required String password,
+  }) {
+    return _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+  }
+
+  // Your Code (Updated to include email, phone, and location fields)
   Future<void> registerUser({
     required String name,
     required String email,
@@ -16,45 +30,48 @@ class AuthenticationService {
     required String role,
   }) async {
     try {
-      // Attempting to create the user account in Firebase Auth
-      UserCredential info = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      UserCredential info = await _auth.createUserWithEmailAndPassword(
+        email: email, 
+        password: password
+      );
 
-      // Extract the generated ID
       String userID = info.user!.uid;
 
-      // Save the profile data to Firestore
+      // This ensures EVERYONE goes to the exact same 'Users' collection
       await _firestore.collection('Users').doc(userID).set({
         'userID': userID, 
-        'name': name, 
+        'name': name,
+        'email': email,
         'role': role,
-        'profileImageUrl': '', // Added placeholder for the image link
+        'profileImageUrl': '', 
+        'location': '',
+        'phone': '',
       });
 
     } catch(e) {
       print('Registration Error: $e');
-      throw e;
+      rethrow;
     }
   }
 
-  // Uploading the image to Storage and saving the URL to Firestore
+  // From Teammate's Code
+  Future<void> logout() {
+    return _auth.signOut();
+  }
+
+  // Your Code
   Future<String?> uploadProfilePicture(String userID, File imageFile) async {
     try {
-      // 1. Create a folder and file path in Firebase Storage
       Reference ref = _storage.ref().child('profile_pictures').child('$userID.jpg');
-      
-      // 2. Upload the physical file
       UploadTask uploadTask = ref.putFile(imageFile);
       TaskSnapshot snapshot = await uploadTask;
-      
-      // 3. Retrieve the secure web link for the uploaded image
       String downloadUrl = await snapshot.ref.getDownloadURL();
       
-      // 4. Update that specific user's Firestore document with the live link
       await _firestore.collection('Users').doc(userID).update({
         'profileImageUrl': downloadUrl,
       });
       
-      return downloadUrl; // Return the link so the UI can update immediately
+      return downloadUrl; 
     } catch (e) {
       print('Upload Error: $e');
       return null;

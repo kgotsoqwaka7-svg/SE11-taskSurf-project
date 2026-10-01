@@ -31,7 +31,7 @@ class _SplashScreenState extends State<SplashScreen>
     )..repeat(reverse: true);
 
     // We will connect this to Login once the Login screen is created.
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(const Duration(seconds: 4), () {
       if (!mounted) return;
 
       // Login navigation will be added here.

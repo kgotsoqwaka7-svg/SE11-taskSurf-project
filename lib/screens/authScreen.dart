@@ -163,16 +163,11 @@ class _AuthScreenState extends State<AuthScreen>
       // WITH THIS 1 LINE:
       await AuthenticationService().registerUser(name: name, email: email, password: password, role: selectedRole);
 
-     if (!mounted) return;
+      if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => (selectedRole == 'postTasks' || selectedRole == 'Provider') 
-              ? const MainNavigation() 
-              : const HomeScreen(),
-        ),
-      );
+      // Show success message and redirect to login — do not auto-login
+      showMessage('Account created successfully! Please sign in.');
+      switchMode(true);
     } on FirebaseAuthException catch (e) {
       String message = 'Registration failed.';
 

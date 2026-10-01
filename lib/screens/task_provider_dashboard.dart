@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'view-applicantions_screen.dart';
+import 'post_task_screen.dart';
 
 class TaskProviderDashboard extends StatelessWidget {
   const TaskProviderDashboard({super.key});
@@ -167,7 +168,10 @@ class TaskProviderDashboard extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF1976D2), // Matched primary color
         onPressed: () {
-          // TODO: Link to the Post Task Form
+          Navigator.push(
+           context,
+            MaterialPageRoute(builder: (context) => const PostTaskScreen()),
+          );
         },
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Post Task', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

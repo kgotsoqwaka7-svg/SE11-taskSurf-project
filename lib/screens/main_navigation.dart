@@ -13,9 +13,10 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
-  // List of the screens we just built
+  // List of the screens we just built, updated with a Messages placeholder
   final List<Widget> _screens = [
     const TaskProviderDashboard(),
+    const Center(child: Text('Messages Screen Coming Soon', style: TextStyle(fontSize: 18, color: Colors.grey))),
     const UserProfileScreen(),
     const SettingsScreen(),
   ];
@@ -45,6 +46,17 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             label: 'Dashboard',
           ),
+          
+          // Added the exact Messages icon block from homeScreen.dart
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline_rounded),
+            selectedIcon: Icon(
+              Icons.chat_bubble_rounded,
+              color: Color(0xFF1976D2),
+            ),
+            label: 'Messages',
+          ),
+
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
             selectedIcon: Icon(
@@ -53,6 +65,7 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             label: 'Profile',
           ),
+          
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(

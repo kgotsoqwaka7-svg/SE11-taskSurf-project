@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'view_task_screen.dart'; // Ensure this matches your file name for TaskDetailsScreen
 import 'authScreen.dart';
+import 'account_info.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _fullName = 'User';
   String _area = 'Your area';
   String _role = 'findWork';
+  String _profileImageUrl = '';
 
   bool _isLoading = true;
 
@@ -49,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _fullName = data['name'] ?? 'User';
           _area = data['area'] ?? 'Your area';
           _role = data['role'] ?? 'findWork';
+          _profileImageUrl = data['profileImageUrl'] ?? '';
           _isLoading = false;
         });
       } else {
@@ -279,34 +283,65 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(height: 15),
 
-          _buildTaskCard(
-            title: 'Help Move Furniture',
-            category: 'Moving',
-            location: _area,
-            payment: 'R350',
-            date: 'Today',
-            time: '14:00',
-            distance: '1.2 km',
-          ),
+          // Replaced hardcoded tasks with a live Firebase StreamBuilder
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('Tasks')
+                .where('status', isEqualTo: 'Active')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: CircularProgressIndicator(color: Color(0xFF1976D2)),
+                  ),
+                );
+              }
 
-          _buildTaskCard(
-            title: 'Garden Cleaning',
-            category: 'Gardening',
-            location: _area,
-            payment: 'R250',
-            date: 'Tomorrow',
-            time: '09:00',
-            distance: '2.4 km',
-          ),
+              if (snapshot.hasError) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: Text('Error loading tasks.'),
+                  ),
+                );
+              }
 
-          _buildTaskCard(
-            title: 'Help With Computer Setup',
-            category: 'Technology',
-            location: _area,
-            payment: 'R300',
-            date: 'Saturday',
-            time: '11:00',
-            distance: '3.1 km',
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Text(
+                      'No tasks available in your area right now.',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                  ),
+                );
+              }
+
+              final tasks = snapshot.data!.docs;
+
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: tasks.length,
+                itemBuilder: (context, index) {
+                  final data = tasks[index].data() as Map<String, dynamic>;
+                  
+                  return _buildTaskCard(
+                    title: data['title']?.toString() ?? 'Untitled Task',
+                    category: data['category']?.toString() ?? 'General',
+                    location: data['location']?.toString() ?? 'Location not specified',
+                    payment: 'R${data['paymentAmount'] ?? 0}',
+                    date: 'Flexible', // Placeholders as TaskModel does not store exact date/time yet
+                    time: 'Anytime',
+                    distance: 'Nearby',
+                    description: data['description']?.toString() ?? 'No description provided.',
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
@@ -724,7 +759,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   
-
+  // Added required 'description' to the parameters so it can be passed to TaskDetailsScreen
   Widget _buildTaskCard({
     required String title,
     required String category,
@@ -733,6 +768,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required String date,
     required String time,
     required String distance,
+    required String description,
   }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 15),
@@ -873,7 +909,23 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(
                 height: 38,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                       context,
+                          MaterialPageRoute(
+                            builder: (context) => TaskDetailsScreen(
+                            title: title,
+                            category: category,
+                            location: location,
+                            payment: payment,
+                            date: date,
+                            time: time,
+                            distance: distance,
+                            description: description, // Passes the live description
+                          ),
+                        ),
+                     );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
                     foregroundColor: Colors.white,
@@ -1237,14 +1289,20 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           const SizedBox(height: 30),
 
-          const CircleAvatar(
+          // Profile photo — shows uploaded image or default icon
+          CircleAvatar(
             radius: 50,
-            backgroundColor: Color(0xFFE3F2FD),
-            child: Icon(
-              Icons.person_rounded,
-              color: Color(0xFF1976D2),
-              size: 55,
-            ),
+            backgroundColor: const Color(0xFFE3F2FD),
+            backgroundImage: _profileImageUrl.isNotEmpty
+                ? NetworkImage(_profileImageUrl) as ImageProvider
+                : null,
+            child: _profileImageUrl.isEmpty
+                ? const Icon(
+                    Icons.person_rounded,
+                    color: Color(0xFF1976D2),
+                    size: 55,
+                  )
+                : null,
           ),
 
           const SizedBox(height: 15),
@@ -1271,6 +1329,14 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildProfileOption(
             Icons.person_outline_rounded,
             'Edit Profile',
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AccountInfoScreen()),
+              );
+              // Reload user data so name/photo update is reflected immediately
+              _loadUserData();
+            },
           ),
 
           _buildProfileOption(

@@ -48,6 +48,9 @@ class AuthenticationService {
         'phone': '',
       });
 
+      // Sign out immediately after registration — user must log in manually
+      await _auth.signOut();
+
     } catch(e) {
       print('Registration Error: $e');
       rethrow;

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'authScreen.dart';
+import 'account_info.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _fullName = 'User';
   String _area = 'Your area';
   String _role = 'findWork';
+  String _profileImageUrl = '';
 
   bool _isLoading = true;
 
@@ -49,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _fullName = data['name'] ?? 'User';
           _area = data['area'] ?? 'Your area';
           _role = data['role'] ?? 'findWork';
+          _profileImageUrl = data['profileImageUrl'] ?? '';
           _isLoading = false;
         });
       } else {
@@ -1237,14 +1240,20 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           const SizedBox(height: 30),
 
-          const CircleAvatar(
+          // Profile photo — shows uploaded image or default icon
+          CircleAvatar(
             radius: 50,
-            backgroundColor: Color(0xFFE3F2FD),
-            child: Icon(
-              Icons.person_rounded,
-              color: Color(0xFF1976D2),
-              size: 55,
-            ),
+            backgroundColor: const Color(0xFFE3F2FD),
+            backgroundImage: _profileImageUrl.isNotEmpty
+                ? NetworkImage(_profileImageUrl) as ImageProvider
+                : null,
+            child: _profileImageUrl.isEmpty
+                ? const Icon(
+                    Icons.person_rounded,
+                    color: Color(0xFF1976D2),
+                    size: 55,
+                  )
+                : null,
           ),
 
           const SizedBox(height: 15),
@@ -1271,6 +1280,14 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildProfileOption(
             Icons.person_outline_rounded,
             'Edit Profile',
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AccountInfoScreen()),
+              );
+              // Reload user data so name/photo update is reflected immediately
+              _loadUserData();
+            },
           ),
 
           _buildProfileOption(

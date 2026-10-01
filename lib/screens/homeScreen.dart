@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'authScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -69,7 +72,120 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!mounted) return;
 
-    Navigator.pushReplacementNamed(context, '/login');
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const AuthScreen()),
+    );
+  }
+
+  Future<void> _getCurrentLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition();
+    List<Placemark> placemarks = await Geocoding().placemarkFromCoordinates(position.latitude, position.longitude);
+
+    if (placemarks.isNotEmpty) {
+      Placemark place = placemarks[0];
+      String newArea = '${place.locality}, ${place.country}';
+      
+      User? user = _auth.currentUser;
+      if (user != null) {
+        await _firestore.collection('users').doc(user.uid).update({
+          'area': newArea,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+        });
+        setState(() {
+          _area = newArea;
+        });
+      }
+    }
+    if (mounted) Navigator.pop(context);
+  }
+
+  void _showLocationBottomSheet() {
+    final TextEditingController _locationController = TextEditingController();
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20, right: 20, top: 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Update Location', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _getCurrentLocation();
+                },
+                icon: const Icon(Icons.my_location),
+                label: const Text('Use My Current Location'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                  backgroundColor: const Color(0xFFE3F2FD),
+                  foregroundColor: const Color(0xFF1976D2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text('Or enter manually:', style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _locationController,
+                decoration: InputDecoration(
+                  hintText: 'e.g. Cape Town',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.check, color: Color(0xFF1976D2)),
+                    onPressed: () async {
+                      if (_locationController.text.isNotEmpty) {
+                        User? user = _auth.currentUser;
+                        if (user != null) {
+                          await _firestore.collection('users').doc(user.uid).update({
+                            'area': _locationController.text,
+                          });
+                          setState(() {
+                            _area = _locationController.text;
+                          });
+                        }
+                        if (mounted) Navigator.pop(context);
+                      }
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // Bottom navigation
@@ -105,12 +221,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? _buildWorkerHome()
                 : _buildTaskProviderHome(),
 
-            _buildPlaceholderPage(
-              Icons.search_rounded,
-              'Explore',
-              isWorker
-                  ? 'Find tasks near you.'
-                  : 'Explore the TaskSurf marketplace.',
+            Column(
+              children: [
+                const SizedBox(height: 20),
+                _buildSearchBar(),
+                Expanded(
+                  child: _buildPlaceholderPage(
+                    Icons.search_rounded,
+                    'Explore',
+                    isWorker
+                        ? 'Find tasks near you.'
+                        : 'Explore the TaskSurf marketplace.',
+                  ),
+                ),
+              ],
             ),
 
             _buildPlaceholderPage(
@@ -148,25 +272,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildHeader(),
 
           const SizedBox(height: 20),
-
-          _buildSearchBar(),
-
-          const SizedBox(height: 25),
-
-          _buildLocationCard(),
-
-          const SizedBox(height: 25),
-
-          _buildSectionTitle(
-            'What are you looking for?',
-            'Explore categories',
-          ),
-
-          const SizedBox(height: 15),
-
-          _buildCategories(),
-
-          const SizedBox(height: 28),
 
           _buildSectionTitle(
             'Tasks near you',
@@ -1172,6 +1277,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildProfileOption(
             Icons.location_on_outlined,
             'Location',
+            onTap: _showLocationBottomSheet,
           ),
 
           _buildProfileOption(
@@ -1211,8 +1317,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildProfileOption(
     IconData icon,
-    String title,
-  ) {
+    String title, {
+    VoidCallback? onTap,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -1234,7 +1341,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Icons.chevron_right_rounded,
           color: Colors.grey,
         ),
-        onTap: () {},
+        onTap: onTap ?? () {},
       ),
     );
   }

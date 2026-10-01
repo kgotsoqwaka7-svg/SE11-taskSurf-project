@@ -17,7 +17,6 @@ class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _waveController;
 
-
   bool isLogin = true;
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
@@ -26,15 +25,11 @@ class _AuthScreenState extends State<AuthScreen>
   // Selected registration role
   String selectedRole = '';
 
-
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController areaController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
-
-  
 
   @override
   void initState() {
@@ -46,14 +41,11 @@ class _AuthScreenState extends State<AuthScreen>
     )..repeat();
   }
 
-
-
   @override
   void dispose() {
     _waveController.dispose();
 
     nameController.dispose();
-    areaController.dispose();
     emailController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
@@ -61,15 +53,11 @@ class _AuthScreenState extends State<AuthScreen>
     super.dispose();
   }
 
-  
-
   void switchMode(bool login) {
     setState(() {
       isLogin = login;
     });
   }
-
-
 
   Future<void> login() async {
     final email = emailController.text.trim();
@@ -94,9 +82,7 @@ class _AuthScreenState extends State<AuthScreen>
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
       );
     } on FirebaseAuthException catch (e) {
       String message = 'Login failed.';
@@ -125,18 +111,14 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
-  
-
   Future<void> register() async {
     final name = nameController.text.trim();
-    final area = areaController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
     final confirmPassword = confirmPasswordController.text.trim();
 
     // Check required fields
     if (name.isEmpty ||
-        area.isEmpty ||
         email.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
@@ -167,23 +149,16 @@ class _AuthScreenState extends State<AuthScreen>
     });
 
     try {
-      
-
-      UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
 
       // Get Firebase UID
       final String uid = userCredential.user!.uid;
-
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
         'fullName': name,
         'email': email,
-        'area': area,
         'role': selectedRole,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -192,9 +167,7 @@ class _AuthScreenState extends State<AuthScreen>
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
       );
     } on FirebaseAuthException catch (e) {
       String message = 'Registration failed.';
@@ -219,8 +192,6 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
- 
-
   Future<void> resetPassword() async {
     final email = emailController.text.trim();
 
@@ -230,13 +201,9 @@ class _AuthScreenState extends State<AuthScreen>
     }
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: email,
-      );
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
 
-      showMessage(
-        'Password reset email sent. Check your inbox.',
-      );
+      showMessage('Password reset email sent. Check your inbox.');
     } on FirebaseAuthException catch (e) {
       String message = 'Could not send password reset email.';
 
@@ -252,22 +219,15 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
-  
-
   void showMessage(String message) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
   }
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -275,8 +235,6 @@ class _AuthScreenState extends State<AuthScreen>
       backgroundColor: const Color(0xFFF7F9FC),
       body: Stack(
         children: [
-          
-
           Positioned(
             top: 0,
             left: 0,
@@ -297,8 +255,6 @@ class _AuthScreenState extends State<AuthScreen>
             ),
           ),
 
-          
-
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -306,8 +262,6 @@ class _AuthScreenState extends State<AuthScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
-          
-
                     const SizedBox(height: 24),
 
                     Container(
@@ -363,10 +317,7 @@ class _AuthScreenState extends State<AuthScreen>
                       ),
                     ),
 
-                    
-
                     const SizedBox(height: 58),
-
 
                     Container(
                       width: double.infinity,
@@ -385,14 +336,10 @@ class _AuthScreenState extends State<AuthScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                         
-
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 250),
                             child: Text(
-                              isLogin
-                                  ? 'Welcome Back'
-                                  : 'Create Your Account',
+                              isLogin ? 'Welcome Back' : 'Create Your Account',
                               key: ValueKey(isLogin),
                               style: const TextStyle(
                                 color: Color(0xFF172033),
@@ -420,8 +367,6 @@ class _AuthScreenState extends State<AuthScreen>
 
                           const SizedBox(height: 22),
 
-                         
-
                           Container(
                             height: 50,
                             padding: const EdgeInsets.all(4),
@@ -446,8 +391,6 @@ class _AuthScreenState extends State<AuthScreen>
                           ),
 
                           const SizedBox(height: 24),
-
-                          
 
                           if (isLogin) ...[
                             _buildLabel('Email'),
@@ -478,13 +421,10 @@ class _AuthScreenState extends State<AuthScreen>
                               },
                             ),
 
-                            
-
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed:
-                                    isLoading ? null : resetPassword,
+                                onPressed: isLoading ? null : resetPassword,
                                 style: TextButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 4,
@@ -503,8 +443,6 @@ class _AuthScreenState extends State<AuthScreen>
 
                             const SizedBox(height: 5),
 
-                        
-
                             _buildMainButton(
                               text: 'Sign In',
                               icon: Icons.arrow_forward_rounded,
@@ -512,8 +450,6 @@ class _AuthScreenState extends State<AuthScreen>
                             ),
 
                             const SizedBox(height: 22),
-
-                          
 
                             Center(
                               child: RichText(
@@ -541,11 +477,7 @@ class _AuthScreenState extends State<AuthScreen>
                                 ),
                               ),
                             ),
-                          ]
-
-                         
-
-                          else ...[
+                          ] else ...[
                             _buildLabel('Full Name'),
 
                             const SizedBox(height: 8),
@@ -580,18 +512,6 @@ class _AuthScreenState extends State<AuthScreen>
                                   ),
                                 ),
                               ],
-                            ),
-
-                            const SizedBox(height: 18),
-
-                            _buildLabel('Your Area'),
-
-                            const SizedBox(height: 8),
-
-                            _buildTextField(
-                              controller: areaController,
-                              hint: 'e.g. Johannesburg',
-                              icon: Icons.location_on_outlined,
                             ),
 
                             const SizedBox(height: 18),
@@ -644,8 +564,6 @@ class _AuthScreenState extends State<AuthScreen>
 
                             const SizedBox(height: 24),
 
-                          
-
                             _buildMainButton(
                               text: 'Create My Account',
                               icon: Icons.arrow_forward_rounded,
@@ -653,8 +571,6 @@ class _AuthScreenState extends State<AuthScreen>
                             ),
 
                             const SizedBox(height: 22),
-
-                          
 
                             Center(
                               child: RichText(
@@ -698,8 +614,6 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
-
-
   Widget _buildToggleButton({
     required String title,
     required bool selected,
@@ -732,8 +646,7 @@ class _AuthScreenState extends State<AuthScreen>
                     ? const Color(0xFF1769F5)
                     : const Color(0xFF64748B),
                 fontSize: 13,
-                fontWeight:
-                    selected ? FontWeight.bold : FontWeight.w500,
+                fontWeight: selected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ),
@@ -741,8 +654,6 @@ class _AuthScreenState extends State<AuthScreen>
       ),
     );
   }
-
-  
 
   Widget _buildLabel(String text) {
     return Text(
@@ -755,8 +666,6 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
-
-
   Widget _buildTextField({
     required TextEditingController controller,
     required String hint,
@@ -767,21 +676,11 @@ class _AuthScreenState extends State<AuthScreen>
       controller: controller,
       keyboardType: keyboardType,
       enabled: !isLoading,
-      style: const TextStyle(
-        color: Color(0xFF172033),
-        fontSize: 14,
-      ),
+      style: const TextStyle(color: Color(0xFF172033), fontSize: 14),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(
-          color: Color(0xFF94A3B8),
-          fontSize: 13,
-        ),
-        prefixIcon: Icon(
-          icon,
-          color: const Color(0xFF64748B),
-          size: 20,
-        ),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+        prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 20),
         filled: true,
         fillColor: const Color(0xFFF8FAFC),
         contentPadding: const EdgeInsets.symmetric(
@@ -790,28 +689,19 @@ class _AuthScreenState extends State<AuthScreen>
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(
-            color: Color(0xFFE2E8F0),
-          ),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(
-            color: Color(0xFFE2E8F0),
-          ),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(
-            color: Color(0xFF1769F5),
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: Color(0xFF1769F5), width: 1.5),
         ),
       ),
     );
   }
-
-  
 
   Widget _buildPasswordField({
     required TextEditingController controller,
@@ -823,16 +713,10 @@ class _AuthScreenState extends State<AuthScreen>
       controller: controller,
       obscureText: obscureText,
       enabled: !isLoading,
-      style: const TextStyle(
-        color: Color(0xFF172033),
-        fontSize: 14,
-      ),
+      style: const TextStyle(color: Color(0xFF172033), fontSize: 14),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(
-          color: Color(0xFF94A3B8),
-          fontSize: 13,
-        ),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
         prefixIcon: const Icon(
           Icons.lock_outline,
           color: Color(0xFF64748B),
@@ -856,28 +740,19 @@ class _AuthScreenState extends State<AuthScreen>
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(
-            color: Color(0xFFE2E8F0),
-          ),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(
-            color: Color(0xFFE2E8F0),
-          ),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(
-            color: Color(0xFF1769F5),
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: Color(0xFF1769F5), width: 1.5),
         ),
       ),
     );
   }
-
-  
 
   Widget _buildMainButton({
     required String text,
@@ -892,8 +767,7 @@ class _AuthScreenState extends State<AuthScreen>
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF1769F5),
           foregroundColor: Colors.white,
-          disabledBackgroundColor:
-              const Color(0xFF1769F5).withOpacity(0.65),
+          disabledBackgroundColor: const Color(0xFF1769F5).withOpacity(0.65),
           disabledForegroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -924,10 +798,8 @@ class _AuthScreenState extends State<AuthScreen>
                 ],
               ),
       ),
-    ); 
+    );
   }
-
-  
 
   Widget _buildChoiceButton({
     required String title,
@@ -948,14 +820,10 @@ class _AuthScreenState extends State<AuthScreen>
         duration: const Duration(milliseconds: 200),
         height: 52,
         decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFFE8F0FF)
-              : const Color(0xFFF8FAFC),
+          color: selected ? const Color(0xFFE8F0FF) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(13),
           border: Border.all(
-            color: selected
-                ? const Color(0xFF1769F5)
-                : const Color(0xFFE2E8F0),
+            color: selected ? const Color(0xFF1769F5) : const Color(0xFFE2E8F0),
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -987,19 +855,13 @@ class _AuthScreenState extends State<AuthScreen>
   }
 }
 
-
-
 class AuthWavePainter extends CustomPainter {
   final double animationValue;
 
-  AuthWavePainter({
-    required this.animationValue,
-  });
+  AuthWavePainter({required this.animationValue});
 
   @override
   void paint(Canvas canvas, Size size) {
-    
-
     final Paint bluePaint = Paint()
       ..color = const Color(0xFF1769F5)
       ..style = PaintingStyle.fill;
@@ -1009,21 +871,16 @@ class AuthWavePainter extends CustomPainter {
     bluePath.moveTo(0, 0);
     bluePath.lineTo(size.width, 0);
 
-    bluePath.lineTo(
-      size.width,
-      size.height * 0.72,
-    );
+    bluePath.lineTo(size.width, size.height * 0.72);
 
     for (double x = size.width; x >= 0; x -= 5) {
       final double normalizedX = x / size.width;
 
       final double wave = math.sin(
-        (normalizedX * 2 * math.pi) +
-            (animationValue * 2 * math.pi),
+        (normalizedX * 2 * math.pi) + (animationValue * 2 * math.pi),
       );
 
-      final double y =
-          size.height * 0.72 + (wave * 9);
+      final double y = size.height * 0.72 + (wave * 9);
 
       bluePath.lineTo(x, y);
     }
@@ -1031,8 +888,6 @@ class AuthWavePainter extends CustomPainter {
     bluePath.close();
 
     canvas.drawPath(bluePath, bluePaint);
-
-    
 
     final Paint lightPaint = Paint()
       ..color = Colors.white.withOpacity(0.10)
@@ -1043,22 +898,16 @@ class AuthWavePainter extends CustomPainter {
     lightPath.moveTo(0, 0);
     lightPath.lineTo(size.width, 0);
 
-    lightPath.lineTo(
-      size.width,
-      size.height * 0.78,
-    );
+    lightPath.lineTo(size.width, size.height * 0.78);
 
     for (double x = size.width; x >= 0; x -= 5) {
       final double normalizedX = x / size.width;
 
       final double wave = math.sin(
-        (normalizedX * 2 * math.pi) +
-            (animationValue * 2 * math.pi) +
-            1.5,
+        (normalizedX * 2 * math.pi) + (animationValue * 2 * math.pi) + 1.5,
       );
 
-      final double y =
-          size.height * 0.78 + (wave * 7);
+      final double y = size.height * 0.78 + (wave * 7);
 
       lightPath.lineTo(x, y);
     }
@@ -1069,9 +918,7 @@ class AuthWavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant AuthWavePainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant AuthWavePainter oldDelegate) {
     return oldDelegate.animationValue != animationValue;
   }
 }

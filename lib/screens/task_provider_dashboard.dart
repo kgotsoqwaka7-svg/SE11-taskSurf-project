@@ -28,7 +28,7 @@ class TaskProviderDashboard extends StatelessWidget {
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('Tasks')
-                  .where('providerId', isEqualTo: currentUser.uid)
+                  .where('creatorID', isEqualTo: currentUser.uid)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {

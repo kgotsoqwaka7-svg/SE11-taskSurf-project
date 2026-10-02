@@ -65,15 +65,24 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const themeColor = Color(0xFF1976D2);
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
-        title: Text('Report ${widget.targetType.name.toUpperCase()}'),
+        backgroundColor: themeColor,
+        elevation: 0,
+        foregroundColor: Colors.white,
+        title: Text(
+          'Report ${widget.targetType.name.toUpperCase()}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) {
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(20.0),
             child: Form(
               key: _formKey,
               child: Column(
@@ -85,48 +94,68 @@ class _ReportScreenState extends State<ReportScreen> {
                     targetType: widget.targetType,
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Select a reason',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
+                  _buildLabel('SELECT A REASON *'),
                   ReportReasonSelector(
                     reasons: _controller.commonReasons,
                     selectedReason: _controller.selectedReason,
                     onSelected: (val) => _controller.setReason(val),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Additional details (optional)',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
+                  _buildLabel('ADDITIONAL DETAILS (OPTIONAL)'),
                   TextFormField(
                     controller: _detailsController,
                     maxLines: 4,
                     maxLength: 500,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Provide context to help moderators review...',
-                      border: OutlineInputBorder(),
+                      hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.all(16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: themeColor),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
-                    height: 48,
+                    height: 54,
                     child: ElevatedButton(
                       onPressed: _controller.isSubmitting ? null : _handleSubmit,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                        foregroundColor: Theme.of(context).colorScheme.onError,
+                        backgroundColor: themeColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
                       ),
                       child: _controller.isSubmitting
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
-                          : const Text('Submit Report'),
+                          : const Text(
+                              'Submit Report',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -134,6 +163,20 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey.shade700,
+        ),
       ),
     );
   }

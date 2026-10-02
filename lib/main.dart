@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'models/report_model.dart';
+import 'screens/report_screen.dart'; // Adjust path if needed
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,15 +17,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       title: 'Task Surf App',
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Youth Jobs Marketplace'),
-        ),
-        body: const Center(
-          child: Text('Firebase Successfully Connected!'),
-        ),
+      debugShowCheckedModeBanner: false,
+      home: ReportScreen(
+        targetId: 'task_001',
+        targetTitle: 'Fix leaking sink in Bellville',
+        targetSubtitle: 'Task posted by Provider XYZ',
+        targetType: ReportType.task,
       ),
     );
   }

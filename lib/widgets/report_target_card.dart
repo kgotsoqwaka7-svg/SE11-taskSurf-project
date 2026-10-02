@@ -28,14 +28,19 @@ class ReportTargetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const themeColor = Color(0xFF1976D2);
+
     return Card(
       elevation: 0,
-      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          child: Icon(_getIcon(), color: Theme.of(context).colorScheme.primary),
+          backgroundColor: themeColor.withValues(alpha: 0.1),
+          child: Icon(_getIcon(), color: themeColor),
         ),
         title: Text(
           targetTitle,
@@ -43,13 +48,12 @@ class ReportTargetCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: targetSubtitle != null
-            ? Text(
-                targetSubtitle!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
-            : Text('Reporting dynamic ${targetType.name}'),
+        subtitle: Text(
+          targetSubtitle ?? 'Reporting dynamic ${targetType.name}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Colors.grey.shade600),
+        ),
       ),
     );
   }

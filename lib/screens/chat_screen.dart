@@ -71,8 +71,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const themeColor = Color(0xFF1976D2);
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
+        backgroundColor: themeColor,
+        elevation: 0,
+        foregroundColor: Colors.white,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -84,7 +90,7 @@ class _ChatScreenState extends State<ChatScreen> {
               widget.currentUserId == widget.providerId
                   ? 'Applicant: ${widget.seekerName}'
                   : 'Job Provider',
-              style: const TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ],
         ),
@@ -96,12 +102,17 @@ class _ChatScreenState extends State<ChatScreen> {
               stream: _chatService.getMessages(_conversationId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                    child: CircularProgressIndicator(color: themeColor),
+                  );
                 }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(
-                    child: Text('No messages yet. Send an inquiry!'),
+                    child: Text(
+                      'No messages yet. Send an inquiry!',
+                      style: TextStyle(color: Colors.grey),
+                    ),
                   );
                 }
 
@@ -126,11 +137,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           vertical: 10.0,
                         ),
                         decoration: BoxDecoration(
-                          color: isMe
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .surfaceVariant,
+                          color: isMe ? themeColor : Colors.white,
+                          border: isMe
+                              ? null
+                              : Border.all(color: Colors.grey.shade300),
                           borderRadius: BorderRadius.only(
                             topLeft: const Radius.circular(12),
                             topRight: const Radius.circular(12),
@@ -145,9 +155,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Text(
                           message.content,
                           style: TextStyle(
-                            color: isMe
-                                ? Theme.of(context).colorScheme.onPrimary
-                                : Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: isMe ? Colors.white : Colors.black87,
                           ),
                         ),
                       ),
@@ -159,24 +167,43 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           SafeArea(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              color: Theme.of(context).colorScheme.surface,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              color: Colors.white,
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _messageController,
                       textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Type a message...',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12.0),
+                        hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+                        filled: true,
+                        fillColor: const Color(0xFFF5F9FF),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 12.0,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: themeColor),
+                        ),
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.send),
-                    color: Theme.of(context).colorScheme.primary,
+                    color: themeColor,
                     onPressed: _sendMessage,
                   ),
                 ],

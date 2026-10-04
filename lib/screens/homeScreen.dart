@@ -7,6 +7,7 @@ import 'view_task_screen.dart'; // Ensure this matches your file name for TaskDe
 import 'authScreen.dart';
 import 'account_info.dart';
 import 'conversations_screen.dart';
+import 'settings.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,10 +29,55 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isLoading = true;
 
+  // ── Explore tab state ──────────────────────────────────────────────
+  final TextEditingController _exploreSearchController = TextEditingController();
+  String _exploreSearchQuery = '';
+  String? _exploreCategoryFilter;      // null = All categories
+  double? _exploreRadiusKm;            // null = Any distance
+  Position? _userPosition;             // cached device position for radius filter
+
+  static const List<String> _categories = [
+    'Cleaning', 'Repairs', 'Gardening', 'Delivery',
+    'Painting', 'Shopping', 'Pet Care', 'Tech Help',
+  ];
+
+  static const List<Map<String, dynamic>> _radiusOptions = [
+    {'label': '5 km',  'value': 5.0},
+    {'label': '10 km', 'value': 10.0},
+    {'label': '20 km', 'value': 20.0},
+    {'label': 'Any',   'value': null},
+  ];
+
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _fetchUserPosition();
+  }
+
+  @override
+  void dispose() {
+    _exploreSearchController.dispose();
+    super.dispose();
+  }
+
+  /// Quietly fetches the device's GPS position and caches it for radius filtering.
+  Future<void> _fetchUserPosition() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      final pos = await Geolocator.getCurrentPosition();
+      if (mounted) setState(() => _userPosition = pos);
+    } catch (_) {}
   }
 
   // Get the logged-in user's information from Firestore
@@ -225,21 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? _buildWorkerHome()
                 : _buildTaskProviderHome(),
 
-            Column(
-              children: [
-                const SizedBox(height: 20),
-                _buildSearchBar(),
-                Expanded(
-                  child: _buildPlaceholderPage(
-                    Icons.search_rounded,
-                    'Explore',
-                    isWorker
-                        ? 'Find tasks near you.'
-                        : 'Explore the TaskSurf marketplace.',
-                  ),
-                ),
-              ],
-            ),
+            _buildExploreTab(),
 
             _buildPlaceholderPage(
               Icons.add_circle_outline_rounded,
@@ -540,45 +572,358 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        height: 54,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blue.withValues(alpha: 0.08),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
+  // ── Explore Tab ────────────────────────────────────────────────────
+
+  Widget _buildExploreTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Header ──────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1976D2),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(30),
+              bottomRight: Radius.circular(30),
             ),
-          ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Explore Tasks',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Find the right task for you',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 14),
+              // ── Search field ────────────────────────────────────
+              Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: TextField(
+                  controller: _exploreSearchController,
+                  onChanged: (val) =>
+                      setState(() => _exploreSearchQuery = val.toLowerCase()),
+                  decoration: InputDecoration(
+                    hintText: 'Search for tasks...',
+                    hintStyle: TextStyle(color: Colors.grey.shade500),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: Color(0xFF1976D2),
+                    ),
+                    suffixIcon: _exploreSearchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close_rounded,
+                                color: Colors.grey),
+                            onPressed: () {
+                              _exploreSearchController.clear();
+                              setState(() => _exploreSearchQuery = '');
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        child: TextField(
-          decoration: InputDecoration(
-            hintText: 'Search for tasks...',
-            hintStyle: TextStyle(
-              color: Colors.grey.shade500,
+
+        // ── Category chips ──────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _exploreCategoryChip('All', null),
+                ..._categories.map((c) => _exploreCategoryChip(c, c)),
+              ],
             ),
-            prefixIcon: const Icon(
-              Icons.search_rounded,
-              color: Color(0xFF1976D2),
+          ),
+        ),
+
+        // ── Radius chips ────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(right: 8, left: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.my_location_rounded,
+                          size: 14, color: Color(0xFF1976D2)),
+                      SizedBox(width: 4),
+                      Text('Radius:',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF1976D2),
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                ..._radiusOptions.map((opt) =>
+                    _exploreRadiusChip(opt['label'] as String,
+                        opt['value'] as double?)),
+              ],
             ),
-            suffixIcon: Icon(
-              Icons.tune_rounded,
-              color: Colors.grey.shade600,
-            ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 16,
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        // ── Results ──────────────────────────────────────────────────
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('Tasks')
+                .where('status', isEqualTo: 'Active')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child:
+                      CircularProgressIndicator(color: Color(0xFF1976D2)),
+                );
+              }
+              if (snapshot.hasError) {
+                return const Center(child: Text('Error loading tasks.'));
+              }
+
+              final allDocs = snapshot.data?.docs ?? [];
+
+              // ── Client-side filtering ──────────────────────────
+              final filtered = allDocs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final title =
+                    (data['title'] ?? '').toString().toLowerCase();
+                final desc =
+                    (data['description'] ?? '').toString().toLowerCase();
+                final category =
+                    (data['category'] ?? '').toString();
+                final taskLat = data['latitude'] as double?;
+                final taskLng = data['longitude'] as double?;
+
+                // 1. Keyword search
+                if (_exploreSearchQuery.isNotEmpty &&
+                    !title.contains(_exploreSearchQuery) &&
+                    !desc.contains(_exploreSearchQuery)) {
+                  return false;
+                }
+
+                // 2. Category filter
+                if (_exploreCategoryFilter != null &&
+                    category != _exploreCategoryFilter) {
+                  return false;
+                }
+
+                // 3. Radius filter
+                if (_exploreRadiusKm != null) {
+                  if (_userPosition == null ||
+                      taskLat == null ||
+                      taskLng == null) {
+                    // Exclude tasks without coordinates when radius filter active
+                    return false;
+                  }
+                  final distM = Geolocator.distanceBetween(
+                    _userPosition!.latitude,
+                    _userPosition!.longitude,
+                    taskLat,
+                    taskLng,
+                  );
+                  if (distM / 1000 > _exploreRadiusKm!) return false;
+                }
+
+                return true;
+              }).toList();
+
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(30),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE3F2FD),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(Icons.search_off_rounded,
+                              size: 40, color: Color(0xFF1976D2)),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text('No tasks found',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text(
+                          _exploreRadiusKm != null &&
+                                  _userPosition == null
+                              ? 'Enable location permission to use radius filter.'
+                              : 'Try adjusting your search or filters.',
+                          textAlign: TextAlign.center,
+                          style:
+                              TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.only(bottom: 20),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final doc = filtered[index];
+                  final data = doc.data() as Map<String, dynamic>;
+                  final taskLat = data['latitude'] as double?;
+                  final taskLng = data['longitude'] as double?;
+
+                  // Compute distance label if possible
+                  String distanceLabel = 'Nearby';
+                  if (_userPosition != null &&
+                      taskLat != null &&
+                      taskLng != null) {
+                    final distM = Geolocator.distanceBetween(
+                      _userPosition!.latitude,
+                      _userPosition!.longitude,
+                      taskLat,
+                      taskLng,
+                    );
+                    distanceLabel = distM < 1000
+                        ? '${distM.toStringAsFixed(0)} m away'
+                        : '${(distM / 1000).toStringAsFixed(1)} km away';
+                  }
+
+                  return _buildTaskCard(
+                    taskId:
+                        data['taskID']?.toString() ?? doc.id,
+                    title: data['title']?.toString() ??
+                        'Untitled Task',
+                    category: data['category']?.toString() ??
+                        'General',
+                    location: data['location']?.toString() ??
+                        'Location not specified',
+                    payment:
+                        'R${data['paymentAmount'] ?? 0}',
+                    date: 'Flexible',
+                    time: 'Anytime',
+                    distance: distanceLabel,
+                    description:
+                        data['description']?.toString() ??
+                            'No description provided.',
+                    providerId: data['postedBy'] ?? '',
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _exploreCategoryChip(String label, String? value) {
+    final bool selected = _exploreCategoryFilter == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _exploreCategoryFilter = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFF1976D2)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected
+                  ? Colors.white
+                  : const Color(0xFF1A1A1A),
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
           ),
         ),
       ),
     );
   }
+
+  Widget _exploreRadiusChip(String label, double? value) {
+    final bool selected = _exploreRadiusKm == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _exploreRadiusKm = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFFE3F2FD)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF1976D2)
+                  : Colors.grey.shade300,
+              width: 1.5,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected
+                  ? const Color(0xFF1976D2)
+                  : Colors.grey.shade700,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
 
   Widget _buildSectionTitle(String title, String action) {
     return Padding(
@@ -1192,6 +1537,10 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildProfileOption(
             Icons.settings_outlined,
             'Settings',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
 
           _buildProfileOption(

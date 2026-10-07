@@ -6,6 +6,8 @@ import 'package:geocoding/geocoding.dart';
 import 'view_task_screen.dart'; // Ensure this matches your file name for TaskDetailsScreen
 import 'authScreen.dart';
 import 'account_info.dart';
+import 'conversations_screen.dart';
+import 'settings.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,10 +29,55 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isLoading = true;
 
+  // ── Explore tab state ──────────────────────────────────────────────
+  final TextEditingController _exploreSearchController = TextEditingController();
+  String _exploreSearchQuery = '';
+  String? _exploreCategoryFilter;      // null = All categories
+  double? _exploreRadiusKm;            // null = Any distance
+  Position? _userPosition;             // cached device position for radius filter
+
+  static const List<String> _categories = [
+    'Cleaning', 'Repairs', 'Gardening', 'Delivery',
+    'Painting', 'Shopping', 'Pet Care', 'Tech Help',
+  ];
+
+  static const List<Map<String, dynamic>> _radiusOptions = [
+    {'label': '5 km',  'value': 5.0},
+    {'label': '10 km', 'value': 10.0},
+    {'label': '20 km', 'value': 20.0},
+    {'label': 'Any',   'value': null},
+  ];
+
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _fetchUserPosition();
+  }
+
+  @override
+  void dispose() {
+    _exploreSearchController.dispose();
+    super.dispose();
+  }
+
+  /// Quietly fetches the device's GPS position and caches it for radius filtering.
+  Future<void> _fetchUserPosition() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      final pos = await Geolocator.getCurrentPosition();
+      if (mounted) setState(() => _userPosition = pos);
+    } catch (_) {}
   }
 
   // Get the logged-in user's information from Firestore
@@ -125,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showLocationBottomSheet() {
-    final TextEditingController _locationController = TextEditingController();
+    final TextEditingController locationController = TextEditingController();
     
     showModalBottomSheet(
       context: context,
@@ -160,21 +207,21 @@ class _HomeScreenState extends State<HomeScreen> {
               const Text('Or enter manually:', style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 10),
               TextField(
-                controller: _locationController,
+                controller: locationController,
                 decoration: InputDecoration(
                   hintText: 'e.g. Cape Town',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.check, color: Color(0xFF1976D2)),
                     onPressed: () async {
-                      if (_locationController.text.isNotEmpty) {
+                      if (locationController.text.isNotEmpty) {
                         User? user = _auth.currentUser;
                         if (user != null) {
                           await _firestore.collection('Users').doc(user.uid).update({
-                            'area': _locationController.text,
+                            'area': locationController.text,
                           });
                           setState(() {
-                            _area = _locationController.text;
+                            _area = locationController.text;
                           });
                         }
                         if (mounted) Navigator.pop(context);
@@ -224,21 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? _buildWorkerHome()
                 : _buildTaskProviderHome(),
 
-            Column(
-              children: [
-                const SizedBox(height: 20),
-                _buildSearchBar(),
-                Expanded(
-                  child: _buildPlaceholderPage(
-                    Icons.search_rounded,
-                    'Explore',
-                    isWorker
-                        ? 'Find tasks near you.'
-                        : 'Explore the TaskSurf marketplace.',
-                  ),
-                ),
-              ],
-            ),
+            _buildExploreTab(),
 
             _buildPlaceholderPage(
               Icons.add_circle_outline_rounded,
@@ -248,11 +281,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   : 'Tasks you have posted will appear here.',
             ),
 
-            _buildPlaceholderPage(
-              Icons.chat_bubble_outline_rounded,
-              'Messages',
-              'Your conversations will appear here.',
-            ),
+            _auth.currentUser != null
+                ? ConversationsScreen(
+                    currentUserId: _auth.currentUser!.uid,
+                  )
+                : const Center(
+                    child: Text('Please log in to view messages.'),
+          ),
 
             _buildProfilePage(),
           ],
@@ -262,8 +297,6 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: _buildBottomNavigationBar(isWorker),
     );
   }
-
-
 
   Widget _buildWorkerHome() {
     return SingleChildScrollView(
@@ -283,7 +316,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(height: 15),
 
-          // Replaced hardcoded tasks with a live Firebase StreamBuilder
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('Tasks')
@@ -327,17 +359,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: tasks.length,
                 itemBuilder: (context, index) {
-                  final data = tasks[index].data() as Map<String, dynamic>;
+                  final doc = tasks[index];
+                  final data = doc.data() as Map<String, dynamic>;
                   
                   return _buildTaskCard(
+                    taskId: data['taskID']?.toString() ?? doc.id,
                     title: data['title']?.toString() ?? 'Untitled Task',
                     category: data['category']?.toString() ?? 'General',
                     location: data['location']?.toString() ?? 'Location not specified',
                     payment: 'R${data['paymentAmount'] ?? 0}',
-                    date: 'Flexible', // Placeholders as TaskModel does not store exact date/time yet
+                    date: 'Flexible',
                     time: 'Anytime',
                     distance: 'Nearby',
                     description: data['description']?.toString() ?? 'No description provided.',
+                    providerId: data['postedBy'] ?? '',
                   );
                 },
               );
@@ -347,8 +382,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  
 
   Widget _buildTaskProviderHome() {
     return SingleChildScrollView(
@@ -408,11 +441,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
- 
-
   Widget _buildHeader() {
-    String firstName = _fullName.split(' ').first;
-
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
       decoration: const BoxDecoration(
@@ -426,7 +455,6 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Row(
             children: [
-              // Logo
               Container(
                 width: 48,
                 height: 48,
@@ -464,7 +492,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Notification button
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.18),
@@ -520,7 +547,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Role indicator
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -546,185 +572,358 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
- 
+  // ── Explore Tab ────────────────────────────────────────────────────
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        height: 54,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blue.withValues(alpha: 0.08),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: TextField(
-          decoration: InputDecoration(
-            hintText: 'Search for tasks...',
-            hintStyle: TextStyle(
-              color: Colors.grey.shade500,
-            ),
-            prefixIcon: const Icon(
-              Icons.search_rounded,
-              color: Color(0xFF1976D2),
-            ),
-            suffixIcon: Icon(
-              Icons.tune_rounded,
-              color: Colors.grey.shade600,
-            ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 16,
+  Widget _buildExploreTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Header ──────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1976D2),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(30),
+              bottomRight: Radius.circular(30),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
- 
-
-  Widget _buildLocationCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE3F2FD),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.location_on_rounded,
-              color: Color(0xFF1976D2),
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Explore Tasks',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Find the right task for you',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 14),
+              // ── Search field ────────────────────────────────────
+              Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: TextField(
+                  controller: _exploreSearchController,
+                  onChanged: (val) =>
+                      setState(() => _exploreSearchQuery = val.toLowerCase()),
+                  decoration: InputDecoration(
+                    hintText: 'Search for tasks...',
+                    hintStyle: TextStyle(color: Colors.grey.shade500),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: Color(0xFF1976D2),
+                    ),
+                    suffixIcon: _exploreSearchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close_rounded,
+                                color: Colors.grey),
+                            onPressed: () {
+                              _exploreSearchController.clear();
+                              setState(() => _exploreSearchQuery = '');
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
           ),
+        ),
 
-          const SizedBox(width: 12),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        // ── Category chips ──────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
-                Text(
-                  'Your location',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _area,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                _exploreCategoryChip('All', null),
+                ..._categories.map((c) => _exploreCategoryChip(c, c)),
               ],
             ),
           ),
+        ),
 
-          TextButton(
-            onPressed: () {},
-            child: const Text(
-              'Change',
-              style: TextStyle(
-                color: Color(0xFF1976D2),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  
-
-  Widget _buildCategories() {
-    final categories = [
-      {
-        'name': 'Moving',
-        'icon': Icons.local_shipping_outlined,
-      },
-      {
-        'name': 'Cleaning',
-        'icon': Icons.cleaning_services_outlined,
-      },
-      {
-        'name': 'Gardening',
-        'icon': Icons.yard_outlined,
-      },
-      {
-        'name': 'Tech',
-        'icon': Icons.computer_outlined,
-      },
-      {
-        'name': 'Delivery',
-        'icon': Icons.delivery_dining_outlined,
-      },
-    ];
-
-    return SizedBox(
-      height: 105,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          return Container(
-            width: 82,
-            margin: const EdgeInsets.only(right: 12),
-            child: Column(
+        // ── Radius chips ────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
-                Container(
-                  width: 62,
-                  height: 62,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withValues(alpha: 0.08),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
+                const Padding(
+                  padding: EdgeInsets.only(right: 8, left: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.my_location_rounded,
+                          size: 14, color: Color(0xFF1976D2)),
+                      SizedBox(width: 4),
+                      Text('Radius:',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF1976D2),
+                              fontWeight: FontWeight.w600)),
                     ],
                   ),
-                  child: Icon(
-                    categories[index]['icon'] as IconData,
-                    color: const Color(0xFF1976D2),
-                    size: 28,
-                  ),
                 ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  categories[index]['name'] as String,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                ..._radiusOptions.map((opt) =>
+                    _exploreRadiusChip(opt['label'] as String,
+                        opt['value'] as double?)),
               ],
             ),
-          );
-        },
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        // ── Results ──────────────────────────────────────────────────
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('Tasks')
+                .where('status', isEqualTo: 'Active')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child:
+                      CircularProgressIndicator(color: Color(0xFF1976D2)),
+                );
+              }
+              if (snapshot.hasError) {
+                return const Center(child: Text('Error loading tasks.'));
+              }
+
+              final allDocs = snapshot.data?.docs ?? [];
+
+              // ── Client-side filtering ──────────────────────────
+              final filtered = allDocs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final title =
+                    (data['title'] ?? '').toString().toLowerCase();
+                final desc =
+                    (data['description'] ?? '').toString().toLowerCase();
+                final category =
+                    (data['category'] ?? '').toString();
+                final taskLat = data['latitude'] as double?;
+                final taskLng = data['longitude'] as double?;
+
+                // 1. Keyword search
+                if (_exploreSearchQuery.isNotEmpty &&
+                    !title.contains(_exploreSearchQuery) &&
+                    !desc.contains(_exploreSearchQuery)) {
+                  return false;
+                }
+
+                // 2. Category filter
+                if (_exploreCategoryFilter != null &&
+                    category != _exploreCategoryFilter) {
+                  return false;
+                }
+
+                // 3. Radius filter
+                if (_exploreRadiusKm != null) {
+                  if (_userPosition == null ||
+                      taskLat == null ||
+                      taskLng == null) {
+                    // Exclude tasks without coordinates when radius filter active
+                    return false;
+                  }
+                  final distM = Geolocator.distanceBetween(
+                    _userPosition!.latitude,
+                    _userPosition!.longitude,
+                    taskLat,
+                    taskLng,
+                  );
+                  if (distM / 1000 > _exploreRadiusKm!) return false;
+                }
+
+                return true;
+              }).toList();
+
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(30),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE3F2FD),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(Icons.search_off_rounded,
+                              size: 40, color: Color(0xFF1976D2)),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text('No tasks found',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text(
+                          _exploreRadiusKm != null &&
+                                  _userPosition == null
+                              ? 'Enable location permission to use radius filter.'
+                              : 'Try adjusting your search or filters.',
+                          textAlign: TextAlign.center,
+                          style:
+                              TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.only(bottom: 20),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final doc = filtered[index];
+                  final data = doc.data() as Map<String, dynamic>;
+                  final taskLat = data['latitude'] as double?;
+                  final taskLng = data['longitude'] as double?;
+
+                  // Compute distance label if possible
+                  String distanceLabel = 'Nearby';
+                  if (_userPosition != null &&
+                      taskLat != null &&
+                      taskLng != null) {
+                    final distM = Geolocator.distanceBetween(
+                      _userPosition!.latitude,
+                      _userPosition!.longitude,
+                      taskLat,
+                      taskLng,
+                    );
+                    distanceLabel = distM < 1000
+                        ? '${distM.toStringAsFixed(0)} m away'
+                        : '${(distM / 1000).toStringAsFixed(1)} km away';
+                  }
+
+                  return _buildTaskCard(
+                    taskId:
+                        data['taskID']?.toString() ?? doc.id,
+                    title: data['title']?.toString() ??
+                        'Untitled Task',
+                    category: data['category']?.toString() ??
+                        'General',
+                    location: data['location']?.toString() ??
+                        'Location not specified',
+                    payment:
+                        'R${data['paymentAmount'] ?? 0}',
+                    date: 'Flexible',
+                    time: 'Anytime',
+                    distance: distanceLabel,
+                    description:
+                        data['description']?.toString() ??
+                            'No description provided.',
+                    providerId: data['postedBy'] ?? '',
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _exploreCategoryChip(String label, String? value) {
+    final bool selected = _exploreCategoryFilter == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _exploreCategoryFilter = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFF1976D2)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected
+                  ? Colors.white
+                  : const Color(0xFF1A1A1A),
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ),
       ),
     );
   }
 
- 
+  Widget _exploreRadiusChip(String label, double? value) {
+    final bool selected = _exploreRadiusKm == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _exploreRadiusKm = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFFE3F2FD)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF1976D2)
+                  : Colors.grey.shade300,
+              width: 1.5,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected
+                  ? const Color(0xFF1976D2)
+                  : Colors.grey.shade700,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
 
   Widget _buildSectionTitle(String title, String action) {
     return Padding(
@@ -758,9 +957,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  
-  // Added required 'description' to the parameters so it can be passed to TaskDetailsScreen
   Widget _buildTaskCard({
+    required String taskId,
     required String title,
     required String category,
     required String location,
@@ -769,6 +967,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required String time,
     required String distance,
     required String description,
+    required String providerId,
   }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 15),
@@ -911,20 +1110,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.push(
-                       context,
-                          MaterialPageRoute(
-                            builder: (context) => TaskDetailsScreen(
-                            title: title,
-                            category: category,
-                            location: location,
-                            payment: payment,
-                            date: date,
-                            time: time,
-                            distance: distance,
-                            description: description, // Passes the live description
-                          ),
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TaskDetailsScreen(
+                        taskId: taskId,
+                        title: title,
+                        category: category,
+                        location: location,
+                        payment: payment,
+                        date: date,
+                        time: time,
+                        distance: distance,
+                        description: description,
+                        providerId: providerId,
                         ),
-                     );
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
@@ -949,8 +1150,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  
 
   Widget _buildProviderBanner() {
     return Container(
@@ -1025,8 +1224,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
- 
 
   Widget _buildProviderActions() {
     return Padding(
@@ -1111,8 +1308,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
- 
 
   Widget _buildProviderTaskCard({
     required String title,
@@ -1227,8 +1422,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  
-
   Widget _buildPlaceholderPage(
     IconData icon,
     String title,
@@ -1280,8 +1473,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  
-
   Widget _buildProfilePage() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -1289,7 +1480,6 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           const SizedBox(height: 30),
 
-          // Profile photo — shows uploaded image or default icon
           CircleAvatar(
             radius: 50,
             backgroundColor: const Color(0xFFE3F2FD),
@@ -1334,7 +1524,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(builder: (context) => const AccountInfoScreen()),
               );
-              // Reload user data so name/photo update is reflected immediately
               _loadUserData();
             },
           ),
@@ -1348,6 +1537,10 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildProfileOption(
             Icons.settings_outlined,
             'Settings',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
 
           _buildProfileOption(
@@ -1410,8 +1603,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-
 
   Widget _buildBottomNavigationBar(bool isWorker) {
     return NavigationBar(

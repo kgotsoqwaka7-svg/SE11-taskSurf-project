@@ -9,19 +9,19 @@ class TaskProviderDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Grab the current logged-in user's ID
     final currentUser = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      // 1. Matched the light blue background color
       backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
-        // 2. Matched the primary dark blue color
-        backgroundColor: const Color(0xFF1976D2), 
+        backgroundColor: const Color(0xFF1976D2),
         elevation: 0,
         title: const Text(
           'My Posted Tasks',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       body: currentUser == null
@@ -33,20 +33,28 @@ class TaskProviderDashboard extends StatelessWidget {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF1976D2)));
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF1976D2)),
+                  );
                 }
 
                 if (snapshot.hasError) {
                   return const Center(child: Text('Error loading tasks.'));
                 }
+
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('You have not posted any tasks yet.', style: TextStyle(fontSize: 16)));
+                  return const Center(
+                    child: Text(
+                      'You have not posted any tasks yet.',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  );
                 }
 
                 final liveTasks = snapshot.data!.docs;
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(20.0), // Matched padding
+                  padding: const EdgeInsets.all(20.0),
                   itemCount: liveTasks.length,
                   itemBuilder: (context, index) {
                     final doc = liveTasks[index];
@@ -56,13 +64,13 @@ class TaskProviderDashboard extends StatelessWidget {
                     final location = data['location'] ?? 'No Location Provided';
                     final applicantsCount = data['applicantsCount'] ?? 0;
 
-                    // 3. Replaced the old Card with the exact styling from HomeScreen
                     return GestureDetector(
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const ViewApplicationsScreen(),
+                            builder: (context) =>
+                                const ViewApplicationsScreen(),
                           ),
                         );
                       },
@@ -82,7 +90,6 @@ class TaskProviderDashboard extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            // 4. Matched the light blue icon boxes
                             Container(
                               width: 48,
                               height: 48,
@@ -95,9 +102,7 @@ class TaskProviderDashboard extends StatelessWidget {
                                 color: Color(0xFF1976D2),
                               ),
                             ),
-
                             const SizedBox(width: 12),
-
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,9 +114,7 @@ class TaskProviderDashboard extends StatelessWidget {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-
                                   const SizedBox(height: 5),
-
                                   Text(
                                     '$applicantsCount applications • $location',
                                     style: TextStyle(
@@ -119,10 +122,7 @@ class TaskProviderDashboard extends StatelessWidget {
                                       fontSize: 12,
                                     ),
                                   ),
-
                                   const SizedBox(height: 6),
-
-                                  // Matched the "Active" status indicator
                                   Row(
                                     children: [
                                       Container(
@@ -147,7 +147,6 @@ class TaskProviderDashboard extends StatelessWidget {
                                 ],
                               ),
                             ),
-
                             const Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
@@ -166,15 +165,23 @@ class TaskProviderDashboard extends StatelessWidget {
               },
             ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF1976D2), // Matched primary color
+        backgroundColor: const Color(0xFF1976D2),
         onPressed: () {
           Navigator.push(
-           context,
-            MaterialPageRoute(builder: (context) => const PostTaskScreen()),
+            context,
+            MaterialPageRoute(
+              builder: (context) => const PostTaskScreen(),
+            ),
           );
         },
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Post Task', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text(
+          'Post Task',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }

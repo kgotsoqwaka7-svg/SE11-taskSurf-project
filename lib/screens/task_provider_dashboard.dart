@@ -7,6 +7,49 @@ import 'post_task_screen.dart';
 class TaskProviderDashboard extends StatelessWidget {
   const TaskProviderDashboard({super.key});
 
+  // Delete function with confirmation dialog
+  void _deleteTask(BuildContext context, String taskId, String title) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Task'),
+        content: Text('Are you sure you want to delete "$title"? This action cannot be undone.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogContext); // Close dialog
+              try {
+                await FirebaseFirestore.instance.collection('Tasks').doc(taskId).delete();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Task deleted successfully'), backgroundColor: Colors.green),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting task: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -60,6 +103,7 @@ class TaskProviderDashboard extends StatelessWidget {
                     final doc = liveTasks[index];
                     final data = doc.data() as Map<String, dynamic>;
 
+                    final taskId = doc.id;
                     final title = data['title'] ?? 'Untitled Task';
                     final location = data['location'] ?? 'No Location Provided';
                     final applicantsCount = data['applicantsCount'] ?? 0;
@@ -69,8 +113,7 @@ class TaskProviderDashboard extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                const ViewApplicationsScreen(),
+                            builder: (context) => ViewApplicationsScreen(taskId: taskId), // Pass the ID here!
                           ),
                         );
                       },
@@ -147,12 +190,45 @@ class TaskProviderDashboard extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: Colors.grey,
+                            
+                            // Pop-Up Menu for Edit/Delete
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert_rounded, color: Colors.grey),
+                              onSelected: (value) {
+                                if (value == 'edit') {
+                                 Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PostTaskScreen(
+                                         taskId: taskId, 
+                                         existingData: data, 
+                                      ),
+                                    ),
+                                  );
+                                } else if (value == 'delete') {
+                                  _deleteTask(context, taskId, title);
+                                }
+                              },
+                              itemBuilder: (BuildContext context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit_outlined, size: 20, color: Color(0xFF1976D2)),
+                                      SizedBox(width: 10),
+                                      Text('Edit Task'),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.delete_outline_rounded, size: 20, color: Colors.red),
+                                      SizedBox(width: 10),
+                                      Text('Delete Task', style: TextStyle(color: Colors.red)),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),

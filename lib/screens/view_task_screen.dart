@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/report_model.dart';
 import '../screens/report_screen.dart';
 import 'chat_screen.dart';
@@ -14,7 +15,7 @@ class TaskDetailsScreen extends StatelessWidget {
   final String time;
   final String distance;
   final String description;
-  final String providerId; // Added to identify the task poster
+  final String providerId; 
 
   const TaskDetailsScreen({
     super.key,
@@ -26,7 +27,7 @@ class TaskDetailsScreen extends StatelessWidget {
     required this.date,
     required this.time,
     required this.distance,
-    required this.providerId, // Required parameter
+    required this.providerId, 
     this.description =
         "Looking for a reliable and hard-working individual to help complete this task successfully. Please ensure you arrive on time and have the necessary tools if required.",
   });
@@ -152,6 +153,58 @@ class TaskDetailsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 16),
+                  
+                  // NEW: Live fetch of the Task Poster's Name and Profile Picture
+                  FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('Users').doc(providerId).get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Row(
+                          children: [
+                            CircleAvatar(radius: 16, backgroundColor: Color(0xFFE3F2FD)),
+                            SizedBox(width: 10),
+                            Text('Loading poster info...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          ],
+                        );
+                      }
+
+                      if (!snapshot.hasData || !snapshot.data!.exists) {
+                        return const Text('Posted by: Unknown User', style: TextStyle(color: Colors.grey, fontSize: 13));
+                      }
+
+                      final userData = snapshot.data!.data() as Map<String, dynamic>;
+                      final posterName = userData['name'] ?? 'Unknown User';
+                      final posterImage = userData['profileImageUrl'] ?? '';
+
+                      return Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: const Color(0xFFE3F2FD),
+                            backgroundImage: posterImage.isNotEmpty ? NetworkImage(posterImage) : null,
+                            child: posterImage.isEmpty
+                                ? const Icon(Icons.person, size: 18, color: Color(0xFF1976D2))
+                                : null,
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Posted by', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                              Text(
+                                posterName,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -257,15 +310,62 @@ class TaskDetailsScreen extends StatelessWidget {
               child: SizedBox(
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Application sent successfully!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                    Navigator.pop(context);
-                  },
+                  onPressed: () async {
+                    final currentUser = FirebaseAuth.instance.currentUser;
+  
+                      if (currentUser == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please log in to apply.')));
+                        return;
+                      }
+
+                      if (currentUser.uid == providerId) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You cannot apply to your own task.')));
+                        return;
+                      }
+
+                      try {
+                          // 1. Fetch the worker's profile data to attach to the application
+                          final userDoc = await FirebaseFirestore.instance.collection('Users').doc(currentUser.uid).get();
+                          final userData = userDoc.data() ?? {};
+
+                          // Extract just the number from the payment string (e.g., "R350" -> 350.0)
+                          final double proposedPrice = double.tryParse(payment.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+
+                          // 2. Create the new application document
+                          final docRef = FirebaseFirestore.instance.collection('applications').doc();
+
+                          // 3. Write exactly to your ApplicationModel structure
+                          await docRef.set({
+                           'applicationId': docRef.id,
+                           'taskId': taskId,
+                           'taskProviderId': providerId, 
+                           'workerId': currentUser.uid,
+                           'workerName': userData['name'] ?? 'Unknown Worker',
+                           'workerLocation': userData['area'] ?? 'Location unavailable',
+                           'proposedPrice': proposedPrice,
+                           'message': 'Hi, I am interested in completing this task for you.',
+                           'status': 'pending',
+                           'appliedAt': FieldValue.serverTimestamp(),
+                           'workerRating': 0.0,
+                      });
+
+                        if (context.mounted) {
+                         ScaffoldMessenger.of(context).showSnackBar(
+                           const SnackBar(
+                            content: Text('Application sent successfully!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                          Navigator.pop(context);
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                           ScaffoldMessenger.of(context).showSnackBar(
+                           SnackBar(content: Text('Error submitting application: $e'), backgroundColor: Colors.red),
+                             );
+                          }
+                       }
+                },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
                     foregroundColor: Colors.white,

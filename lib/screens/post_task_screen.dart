@@ -3,7 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class PostTaskScreen extends StatefulWidget {
-  const PostTaskScreen({super.key});
+  final String? taskId;
+  final Map<String, dynamic>? existingData;
+
+  const PostTaskScreen({
+    super.key, 
+    this.taskId, 
+    this.existingData,
+  });
 
   @override
   State<PostTaskScreen> createState() => _PostTaskScreenState();
@@ -15,7 +22,7 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
   // Controllers matching TaskModel requirements
   final _titleController = TextEditingController();
   final _budgetController = TextEditingController();
-  final _workersController = TextEditingController(text: '1'); // Added for numOfWorkers
+  final _workersController = TextEditingController(text: '1'); 
   final _locationController = TextEditingController();
   final _descriptionController = TextEditingController();
 
@@ -32,6 +39,20 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
     {'name': 'Pet Care', 'icon': Icons.pets},
     {'name': 'Tech Help', 'icon': Icons.computer_outlined},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // If we are editing an existing task, pre-fill all the fields
+    if (widget.existingData != null) {
+      _titleController.text = widget.existingData!['title'] ?? '';
+      _budgetController.text = (widget.existingData!['paymentAmount'] ?? '').toString();
+      _workersController.text = (widget.existingData!['numOfWorkers'] ?? '1').toString();
+      _locationController.text = widget.existingData!['location'] ?? '';
+      _descriptionController.text = widget.existingData!['description'] ?? '';
+      _selectedCategory = widget.existingData!['category'];
+    }
+  }
 
   @override
   void dispose() {
@@ -59,32 +80,41 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) throw Exception('User not logged in');
 
-      // Create a document reference first to generate the taskID
-      final docRef = FirebaseFirestore.instance.collection('Tasks').doc();
-
-      // Writing exact fields to match your TaskModel
-      await docRef.set({
-        'taskID': docRef.id,
+      // Create a map of the data to save
+      final taskData = {
         'creatorID': currentUser.uid,
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'location': _locationController.text.trim(),
-        'status': 'Active', // Matches the dashboard UI requirement
+        'status': 'Active', 
         'paymentAmount': double.tryParse(_budgetController.text.replaceAll('R', '').trim()) ?? 0.0,
         'numOfWorkers': int.tryParse(_workersController.text.trim()) ?? 1,
         'category': _selectedCategory,
-      });
+      };
+
+      if (widget.taskId != null) {
+        // UPDATE EXISTING TASK
+        await FirebaseFirestore.instance.collection('Tasks').doc(widget.taskId).update(taskData);
+      } else {
+        // CREATE NEW TASK
+        final docRef = FirebaseFirestore.instance.collection('Tasks').doc();
+        taskData['taskID'] = docRef.id;
+        await docRef.set(taskData);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Task successfully posted!'), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(widget.taskId != null ? 'Task successfully updated!' : 'Task successfully posted!'), 
+            backgroundColor: Colors.green
+          ),
         );
         Navigator.pop(context); // Return to the dashboard automatically
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error posting task: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error saving task: $e'), backgroundColor: Colors.red),
         );
         setState(() => _isLoading = false);
       }
@@ -93,7 +123,7 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const themeColor = Color(0xFF1976D2); // Standardized team color
+    const themeColor = Color(0xFF1976D2); 
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F9FF),
@@ -101,7 +131,7 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
         backgroundColor: themeColor,
         elevation: 0,
         foregroundColor: Colors.white,
-        title: const Text('Post a Task', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(widget.taskId != null ? 'Edit Task' : 'Post a Task', style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: Form(
         key: _formKey,
@@ -230,9 +260,9 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Post Task - It\'s Free',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      : Text(
+                          widget.taskId != null ? 'Update Task' : 'Post Task - It\'s Free',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                 ),
               ),

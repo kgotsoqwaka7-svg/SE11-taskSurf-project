@@ -435,8 +435,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ]),
 
                 // ── Danger Zone ───────────────────────────────────
+                // ── Danger Zone ───────────────────────────────────
                 _sectionLabel('ACCOUNT ACTIONS'),
                 _settingsCard(children: [
+                  _navTile(
+                    icon: Icons.logout_rounded,
+                    iconColor: Colors.orange,
+                    title: 'Log Out',
+                    titleColor: Colors.orange,
+                    subtitle: 'Sign out of your TaskSurf account',
+                    onTap: () async {
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AuthScreen()),
+                          (route) => false, // Clears the navigation history
+                        );
+                      }
+                    },
+                  ),
+                  _divider(),
                   _navTile(
                     icon: Icons.delete_forever_rounded,
                     iconColor: Colors.red,
@@ -447,7 +466,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _showDeleteAccountDialog,
                   ),
                 ]),
-
                 const SizedBox(height: 30),
                 Center(
                   child: Text(

@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../Services/authentication_service.dart';
@@ -7,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/main_navigation.dart';
 
 import 'homeScreen.dart';
+import 'admin_dashboard_screen.dart'; // Make sure you create this file!
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -80,21 +80,53 @@ class _AuthScreenState extends State<AuthScreen>
         password: password,
       );
 
-      // 1. Fetch the user's role from your database
+      // 1. Fetch the user's document from the database
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('Users').doc(FirebaseAuth.instance.currentUser!.uid).get();
+      
+      // 2. Check for account suspension
+      bool isSuspended = false;
+      if (doc.data() != null && (doc.data() as Map<String, dynamic>).containsKey('isSuspended')) {
+        isSuspended = doc['isSuspended'];
+      }
+
+      if (isSuspended) {
+        await FirebaseAuth.instance.signOut(); // Kick them out immediately
+        if (mounted) {
+          setState(() { isLoading = false; });
+          showDialog(
+            context: context, 
+            builder: (ctx) => AlertDialog(
+              title: const Text('Account Suspended', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              content: const Text('Your account has been suspended for violating our terms of service.'),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+            )
+          );
+        }
+        return; // Stop the login process
+      }
+
       String role = doc['role'] ?? 'findWork';
 
       if (!mounted) return;
 
-      // 2. Route them to the correct dashboard based on their role
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => (role == 'postTasks' || role == 'Provider') 
-              ? const MainNavigation() 
-              : const HomeScreen(),
-        ),
-      );
+      // 3. Route them to the correct dashboard based on their role
+      if (role == 'admin') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+        );
+      } else if (role == 'postTasks' || role == 'Provider') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainNavigation()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       String message = 'Login failed.';
 
@@ -160,7 +192,7 @@ class _AuthScreenState extends State<AuthScreen>
     });
 
     try {
-      // WITH THIS 1 LINE:
+      // Using AuthenticationService to register
       await AuthenticationService().registerUser(name: name, email: email, password: password, role: selectedRole);
 
       if (!mounted) return;

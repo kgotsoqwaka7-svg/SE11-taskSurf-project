@@ -11,18 +11,39 @@ class AuthenticationService {
   // From Teammate's Code
   User? get currentUser => _auth.currentUser;
 
-  // From Teammate's Code
+  // UPDATED: Checks for suspension immediately upon login
   Future<UserCredential> login({
     required String email,
     required String password,
-  }) {
-    return _auth.signInWithEmailAndPassword(
+  }) async {
+    // 1. Authenticate with Firebase
+    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
       email: email,
       password: password,
     );
+
+    // 2. Fetch the user's document from Firestore to check their status
+    DocumentSnapshot userDoc = await _firestore
+        .collection('Users')
+        .doc(userCredential.user!.uid)
+        .get();
+
+    // 3. Check if the account is suspended
+    if (userDoc.exists) {
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      bool isSuspended = userData['isSuspended'] ?? false;
+
+      if (isSuspended) {
+        // If suspended, sign them out immediately and throw an error
+        await _auth.signOut();
+        throw Exception('Your account has been suspended for violating our terms of service.');
+      }
+    }
+
+    return userCredential;
   }
 
-  // Your Code (Updated to include email, phone, and location fields)
+  // Your Code (Updated to include default isSuspended field)
   Future<void> registerUser({
     required String name,
     required String email,
@@ -46,6 +67,7 @@ class AuthenticationService {
         'profileImageUrl': '', 
         'location': '',
         'phone': '',
+        'isSuspended': false, // New users are active by default
       });
 
       // Sign out immediately after registration — user must log in manually

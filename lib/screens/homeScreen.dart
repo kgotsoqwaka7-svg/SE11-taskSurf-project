@@ -8,6 +8,7 @@ import 'authScreen.dart';
 import 'account_info.dart';
 import 'conversations_screen.dart';
 import 'settings.dart';
+import 'my_applications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -273,13 +274,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
             _buildExploreTab(),
 
-            _buildPlaceholderPage(
-              Icons.add_circle_outline_rounded,
-              isWorker ? 'My Applications' : 'My Tasks',
-              isWorker
-                  ? 'Your task applications will appear here.'
-                  : 'Tasks you have posted will appear here.',
-            ),
+            
+            isWorker
+                ? const MyApplicationsScreen() 
+                : _buildPlaceholderPage(
+                    Icons.add_circle_outline_rounded,
+                    'My Tasks',
+                    'Tasks you have posted will appear here.',
+                  ),
 
             _auth.currentUser != null
                 ? ConversationsScreen(
@@ -372,7 +374,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     time: 'Anytime',
                     distance: 'Nearby',
                     description: data['description']?.toString() ?? 'No description provided.',
-                    providerId: data['postedBy'] ?? '',
+                    providerId: data['creatorID']?.toString() ?? '',
                   );
                 },
               );
@@ -837,7 +839,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     description:
                         data['description']?.toString() ??
                             'No description provided.',
-                    providerId: data['postedBy'] ?? '',
+                    providerId: data['creatorID']?.toString() ?? '',
                   );
                 },
               );

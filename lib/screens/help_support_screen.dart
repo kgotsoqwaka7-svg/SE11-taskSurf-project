@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'support_chat_screen.dart';
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
@@ -330,10 +331,130 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               ),
             ),
 
+            const SizedBox(height: 28),
+
+            _sectionLabel('YOUR SUPPORT TICKETS'),
+            const SizedBox(height: 12),
+            _buildMyTickets(),
+
             const SizedBox(height: 30),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildMyTickets() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return _card(
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Sign in to view your support conversations.'),
+        ),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('supportTickets')
+          .where('userId', isEqualTo: user.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Unable to load your tickets: ${snapshot.error}'),
+            ),
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return _card(
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        final tickets = snapshot.data?.docs.toList() ?? [];
+        tickets.sort((a, b) {
+          final aTime = a.data()['submittedAt'];
+          final bTime = b.data()['submittedAt'];
+          if (aTime is Timestamp && bTime is Timestamp) {
+            return bTime.compareTo(aTime);
+          }
+          if (aTime is Timestamp) return -1;
+          if (bTime is Timestamp) return 1;
+          return 0;
+        });
+        if (tickets.isEmpty) {
+          return _card(
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Your support conversations will appear here.'),
+            ),
+          );
+        }
+
+        return Column(
+          children: tickets.map((ticket) {
+            final data = ticket.data();
+            final status = data['status'] as String? ?? 'open';
+            final subject = data['subject'] as String? ?? 'Support ticket';
+            final isResolved = status == 'resolved';
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor:
+                      isResolved ? Colors.grey.shade100 : _lightBlue,
+                  child: Icon(
+                    Icons.support_agent_rounded,
+                    color: isResolved ? Colors.grey : _blue,
+                  ),
+                ),
+                title: Text(
+                  subject,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(isResolved ? 'Resolved' : 'Tap to message support'),
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.grey.shade500,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SupportChatScreen(
+                        ticketId: ticket.id,
+                        subject: subject,
+                        initialMessage: data['message'] as String? ?? '',
+                        isAdmin: false,
+                        isResolved: isResolved,
+                        userEmail: data['userEmail'] as String? ?? '',
+                        submittedAt: data['submittedAt'] is Timestamp
+                            ? data['submittedAt'] as Timestamp
+                            : null,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 

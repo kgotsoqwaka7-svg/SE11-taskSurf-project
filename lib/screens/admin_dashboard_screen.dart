@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'authScreen.dart';
+import 'support_chat_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -18,7 +19,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -59,6 +60,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       );
     } catch (e) {
       debugPrint('Error deleting task: $e');
+    }
+  }
+
+  Future<void> _resolveSupportTicket(
+      BuildContext context, String ticketId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('supportTickets')
+          .doc(ticketId)
+          .update({
+        'status': 'resolved',
+        'resolvedAt': FieldValue.serverTimestamp(),
+      });
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Support ticket marked as resolved'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error resolving support ticket: $e');
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to resolve ticket: $e')),
+      );
     }
   }
 
@@ -166,6 +193,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           tabs: const [
             Tab(icon: Icon(Icons.flag_rounded), text: 'Reports'),
             Tab(icon: Icon(Icons.verified_rounded), text: 'Verifications'),
+            Tab(icon: Icon(Icons.support_agent_rounded), text: 'Support'),
           ],
         ),
       ),
@@ -174,6 +202,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         children: [
           _buildReportsTab(),
           _buildVerificationsTab(),
+          _buildSupportTicketsTab(),
         ],
       ),
     );
@@ -223,6 +252,131 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         value: 'suspend', child: Text('Suspend User')),
                     const PopupMenuItem(
                         value: 'delete_task', child: Text('Delete Task')),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSupportTicketsTab() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('supportTickets')
+          .where('status', isEqualTo: 'open')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Unable to load support tickets: ${snapshot.error}'),
+          );
+        }
+
+        final tickets = snapshot.data?.docs ?? [];
+        if (tickets.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.support_agent_rounded,
+                    size: 64, color: Colors.grey.shade300),
+                const SizedBox(height: 12),
+                Text(
+                  'No open support tickets',
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: tickets.length,
+          itemBuilder: (context, index) {
+            final ticket = tickets[index];
+            final data = ticket.data() as Map<String, dynamic>;
+            final userEmail = data['userEmail'] as String? ?? '';
+            final userId = data['userId'] as String? ?? '';
+            final subject = data['subject'] as String? ?? 'No subject';
+            final message = data['message'] as String? ?? '';
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subject,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      userEmail.isNotEmpty ? userEmail : userId,
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(message),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => SupportChatScreen(
+                                    ticketId: ticket.id,
+                                    subject: subject,
+                                    initialMessage: message,
+                                    isAdmin: true,
+                                    isResolved: false,
+                                    userEmail: userEmail.isNotEmpty
+                                        ? userEmail
+                                        : userId,
+                                    submittedAt:
+                                        data['submittedAt'] is Timestamp
+                                            ? data['submittedAt'] as Timestamp
+                                            : null,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.chat_bubble_outline_rounded),
+                            label: const Text('Reply'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () =>
+                                _resolveSupportTicket(context, ticket.id),
+                            icon: const Icon(Icons.check_rounded, size: 18),
+                            label: const Text('Mark resolved'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),

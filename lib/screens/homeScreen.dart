@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ import 'account_info.dart';
 import 'conversations_screen.dart';
 import 'settings.dart';
 import 'my_applications_screen.dart';
+import 'help_support_screen.dart';
+import 'verification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,6 +38,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _exploreSearchQuery = '';
   String? _exploreCategoryFilter;      // null = All categories
   double? _exploreRadiusKm;            // null = Any distance
+  double? _customRadiusKm;             // stores user-entered custom radius
+  bool _isCustomRadius = false;        // true when custom radius is active
   Position? _userPosition;             // cached device position for radius filter
 
   static const List<String> _categories = [
@@ -98,9 +103,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           _fullName = data['name'] ?? 'User';
-          _area = data['area'] ?? 'Your area';
+          _area = data['area'] ?? data['location'] ?? 'Your area';
           _role = data['role'] ?? 'findWork';
-          _profileImageUrl = data['profileImageUrl'] ?? '';
+          _profileImageUrl = (data['profileImageUrl'] ??
+                  data['photoUrl'] ??
+                  data['photoURL'] ??
+                  data['profilePicture'] ??
+                  data['profileImage'] ??
+                  user.photoURL ??
+                  '')
+              .toString();
           _isLoading = false;
         });
       } else {
@@ -648,51 +660,23 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // ── Category chips ──────────────────────────────────────────
+        // ── Modern Category & Radius Filter Dropdowns ──────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _exploreCategoryChip('All', null),
-                ..._categories.map((c) => _exploreCategoryChip(c, c)),
-              ],
-            ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildCategoryDropdown(),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildRadiusDropdown(),
+              ),
+            ],
           ),
         ),
 
-        // ── Radius chips ────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.only(right: 8, left: 4),
-                  child: Row(
-                    children: [
-                      Icon(Icons.my_location_rounded,
-                          size: 14, color: Color(0xFF1976D2)),
-                      SizedBox(width: 4),
-                      Text('Radius:',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF1976D2),
-                              fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-                ..._radiusOptions.map((opt) =>
-                    _exploreRadiusChip(opt['label'] as String,
-                        opt['value'] as double?)),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
 
         // ── Results ──────────────────────────────────────────────────
         Expanded(
@@ -850,78 +834,516 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _exploreCategoryChip(String label, String? value) {
-    final bool selected = _exploreCategoryFilter == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () => setState(() => _exploreCategoryFilter = value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xFF1976D2)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blue.withValues(alpha: 0.08),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
-              ),
-            ],
+  String _formatKm(double km) {
+    return km % 1 == 0 ? km.toInt().toString() : km.toString();
+  }
+
+  Widget _buildCategoryDropdown() {
+    final bool isActive = _exploreCategoryFilter != null;
+    final String label = _exploreCategoryFilter ?? 'All Categories';
+
+    return Container(
+      height: 42,
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFFE3F2FD) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? const Color(0xFF1976D2) : Colors.grey.shade300,
+          width: isActive ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected
-                  ? Colors.white
-                  : const Color(0xFF1A1A1A),
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: PopupMenuButton<String?>(
+              tooltip: 'Select Category',
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 4,
+              color: Colors.white,
+              offset: const Offset(0, 46),
+              onSelected: (val) {
+                setState(() => _exploreCategoryFilter = val);
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem<String?>(
+                  value: null,
+                  child: Row(
+                    children: [
+                      Icon(
+                        _exploreCategoryFilter == null
+                            ? Icons.check_circle_rounded
+                            : Icons.circle_outlined,
+                        size: 18,
+                        color: _exploreCategoryFilter == null
+                            ? const Color(0xFF1976D2)
+                            : Colors.grey.shade400,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'All Categories',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: _exploreCategoryFilter == null
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: _exploreCategoryFilter == null
+                              ? const Color(0xFF1976D2)
+                              : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(height: 1),
+                ..._categories.map(
+                  (c) => PopupMenuItem<String?>(
+                    value: c,
+                    child: Row(
+                      children: [
+                        Icon(
+                          _exploreCategoryFilter == c
+                              ? Icons.check_circle_rounded
+                              : Icons.circle_outlined,
+                          size: 18,
+                          color: _exploreCategoryFilter == c
+                              ? const Color(0xFF1976D2)
+                              : Colors.grey.shade400,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          c,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: _exploreCategoryFilter == c
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: _exploreCategoryFilter == c
+                                ? const Color(0xFF1976D2)
+                                : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.grid_view_rounded,
+                      size: 15,
+                      color: isActive
+                          ? const Color(0xFF1976D2)
+                          : Colors.grey.shade600,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight:
+                              isActive ? FontWeight.w600 : FontWeight.w500,
+                          color: isActive
+                              ? const Color(0xFF1976D2)
+                              : Colors.grey.shade800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: isActive
+                          ? const Color(0xFF1976D2)
+                          : Colors.grey.shade600,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
+          if (isActive)
+            GestureDetector(
+              onTap: () => setState(() => _exploreCategoryFilter = null),
+              child: const Padding(
+                padding: EdgeInsets.only(right: 8, left: 2),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 15,
+                  color: Color(0xFF1976D2),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _exploreRadiusChip(String label, double? value) {
-    final bool selected = _exploreRadiusKm == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () => setState(() => _exploreRadiusKm = value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xFFE3F2FD)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFF1976D2)
-                  : Colors.grey.shade300,
-              width: 1.5,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected
-                  ? const Color(0xFF1976D2)
-                  : Colors.grey.shade700,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
+  Widget _buildRadiusDropdown() {
+    final bool isActive = _exploreRadiusKm != null;
+    final String label = !isActive
+        ? 'Any Distance'
+        : '${_formatKm(_exploreRadiusKm!)} km';
+
+    return Container(
+      height: 42,
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFFE3F2FD) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? const Color(0xFF1976D2) : Colors.grey.shade300,
+          width: isActive ? 1.5 : 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
+      child: Row(
+        children: [
+          Expanded(
+            child: PopupMenuButton<String>(
+              tooltip: 'Select Radius',
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 4,
+              color: Colors.white,
+              offset: const Offset(0, 46),
+              onSelected: (val) {
+                if (val == 'any') {
+                  setState(() {
+                    _exploreRadiusKm = null;
+                    _isCustomRadius = false;
+                  });
+                } else if (val == 'custom') {
+                  _showCustomRadiusDialog();
+                } else {
+                  final parsed = double.tryParse(val);
+                  if (parsed != null) {
+                    setState(() {
+                      _exploreRadiusKm = parsed;
+                      _isCustomRadius = false;
+                    });
+                    if (_userPosition == null) {
+                      _fetchUserPosition();
+                    }
+                  }
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem<String>(
+                  value: 'any',
+                  child: Row(
+                    children: [
+                      Icon(
+                        _exploreRadiusKm == null
+                            ? Icons.check_circle_rounded
+                            : Icons.circle_outlined,
+                        size: 18,
+                        color: _exploreRadiusKm == null
+                            ? const Color(0xFF1976D2)
+                            : Colors.grey.shade400,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Any Distance',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: _exploreRadiusKm == null
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: _exploreRadiusKm == null
+                              ? const Color(0xFF1976D2)
+                              : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(height: 1),
+                ...[5.0, 10.0, 20.0].map((km) {
+                  final isSelected = !_isCustomRadius && _exploreRadiusKm == km;
+                  return PopupMenuItem<String>(
+                    value: km.toInt().toString(),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isSelected
+                              ? Icons.check_circle_rounded
+                              : Icons.circle_outlined,
+                          size: 18,
+                          color: isSelected
+                              ? const Color(0xFF1976D2)
+                              : Colors.grey.shade400,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '${km.toInt()} km',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSelected
+                                ? const Color(0xFF1976D2)
+                                : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const PopupMenuDivider(height: 1),
+                PopupMenuItem<String>(
+                  value: 'custom',
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isCustomRadius && _exploreRadiusKm != null
+                            ? Icons.check_circle_rounded
+                            : Icons.tune_rounded,
+                        size: 18,
+                        color: const Color(0xFF1976D2),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _isCustomRadius && _exploreRadiusKm != null
+                              ? 'Custom: ${_formatKm(_exploreRadiusKm!)} km'
+                              : (_customRadiusKm != null
+                                  ? 'Custom (${_formatKm(_customRadiusKm!)} km)...'
+                                  : 'Custom distance...'),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight:
+                                _isCustomRadius && _exploreRadiusKm != null
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                            color: const Color(0xFF1976D2),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.edit_outlined,
+                        size: 14,
+                        color: Color(0xFF1976D2),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.my_location_rounded,
+                      size: 15,
+                      color: const Color(0xFF1976D2),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight:
+                              isActive ? FontWeight.w600 : FontWeight.w500,
+                          color: isActive
+                              ? const Color(0xFF1976D2)
+                              : Colors.grey.shade800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: isActive
+                          ? const Color(0xFF1976D2)
+                          : Colors.grey.shade600,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (isActive)
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _exploreRadiusKm = null;
+                  _isCustomRadius = false;
+                });
+              },
+              child: const Padding(
+                padding: EdgeInsets.only(right: 8, left: 2),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 15,
+                  color: Color(0xFF1976D2),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showCustomRadiusDialog() {
+    final String initialText = _customRadiusKm != null
+        ? _formatKm(_customRadiusKm!)
+        : (_exploreRadiusKm != null &&
+                !_radiusOptions.any((opt) => opt['value'] == _exploreRadiusKm))
+            ? _formatKm(_exploreRadiusKm!)
+            : '';
+
+    final TextEditingController textController =
+        TextEditingController(text: initialText);
+    if (initialText.isNotEmpty) {
+      textController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: initialText.length,
+      );
+    }
+    String? localError;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            void submit() {
+              final raw = textController.text.trim().replaceAll(',', '.');
+              final val = double.tryParse(raw);
+              if (val == null || val <= 0) {
+                setDialogState(() {
+                  localError = 'Enter a valid number greater than 0';
+                });
+                return;
+              }
+              setState(() {
+                _customRadiusKm = val;
+                _exploreRadiusKm = val;
+                _isCustomRadius = true;
+              });
+              if (_userPosition == null) {
+                _fetchUserPosition();
+              }
+              Navigator.pop(ctx);
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.tune_rounded, color: Color(0xFF1976D2), size: 22),
+                  SizedBox(width: 8),
+                  Text(
+                    'Custom Radius',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Enter your preferred radius in kilometres:',
+                    style: TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: textController,
+                    autofocus: true,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => submit(),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. 15',
+                      suffixText: 'km',
+                      suffixStyle: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1976D2),
+                      ),
+                      errorText: localError,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF1976D2),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                if (_isCustomRadius && _exploreRadiusKm != null)
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _exploreRadiusKm = null;
+                        _isCustomRadius = false;
+                      });
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1976D2),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: submit,
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1475,103 +1897,178 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  ImageProvider? _getProfileImageProvider(String? url) {
+    if (url == null) return null;
+    final clean = url.trim();
+    if (clean.isEmpty || clean == 'null') return null;
+    if (clean.startsWith('data:image')) {
+      try {
+        final base64String = clean.split(',').last;
+        return MemoryImage(base64Decode(base64String));
+      } catch (_) {
+        return null;
+      }
+    }
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      try {
+        return MemoryImage(base64Decode(clean));
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(clean);
+  }
+
   Widget _buildProfilePage() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          const SizedBox(height: 30),
+    final user = _auth.currentUser;
 
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: const Color(0xFFE3F2FD),
-            backgroundImage: _profileImageUrl.isNotEmpty
-                ? NetworkImage(_profileImageUrl) as ImageProvider
-                : null,
-            child: _profileImageUrl.isEmpty
-                ? const Icon(
-                    Icons.person_rounded,
-                    color: Color(0xFF1976D2),
-                    size: 55,
-                  )
-                : null,
-          ),
+    return StreamBuilder<DocumentSnapshot>(
+      stream: user != null
+          ? _firestore.collection('Users').doc(user.uid).snapshots()
+          : null,
+      builder: (context, snapshot) {
+        Map<String, dynamic>? data;
+        if (snapshot.hasData && snapshot.data!.exists) {
+          data = snapshot.data!.data() as Map<String, dynamic>?;
+        }
 
-          const SizedBox(height: 15),
+        final String photoUrl = (data?['profileImageUrl'] ??
+                data?['photoUrl'] ??
+                data?['photoURL'] ??
+                data?['profilePicture'] ??
+                data?['profileImage'] ??
+                user?.photoURL ??
+                _profileImageUrl)
+            .toString()
+            .trim();
 
-          Text(
-            _fullName,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+        final String name = data?['name']?.toString() ?? _fullName;
+        final String area = data?['location']?.toString() ??
+            data?['area']?.toString() ??
+            _area;
+        final bool isVerified = data?['isVerified'] == true;
 
-          const SizedBox(height: 5),
+        final imageProvider = _getProfileImageProvider(photoUrl);
 
-          Text(
-            _area,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-            ),
-          ),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              const SizedBox(height: 30),
 
-          const SizedBox(height: 30),
-
-          _buildProfileOption(
-            Icons.person_outline_rounded,
-            'Edit Profile',
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AccountInfoScreen()),
-              );
-              _loadUserData();
-            },
-          ),
-
-          _buildProfileOption(
-            Icons.location_on_outlined,
-            'Location',
-            onTap: _showLocationBottomSheet,
-          ),
-
-          _buildProfileOption(
-            Icons.settings_outlined,
-            'Settings',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
-
-          _buildProfileOption(
-            Icons.help_outline_rounded,
-            'Help & Support',
-          ),
-
-          const SizedBox(height: 10),
-
-          ListTile(
-            onTap: _signOut,
-            leading: const Icon(
-              Icons.logout_rounded,
-              color: Colors.red,
-            ),
-            title: const Text(
-              'Sign Out',
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.w600,
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: const Color(0xFFE3F2FD),
+                backgroundImage: imageProvider,
+                onBackgroundImageError: imageProvider != null
+                    ? (exception, stackTrace) {
+                        debugPrint('Error loading profile image: $exception');
+                      }
+                    : null,
+                child: imageProvider == null
+                    ? const Icon(
+                        Icons.person_rounded,
+                        color: Color(0xFF1976D2),
+                        size: 55,
+                      )
+                    : null,
               ),
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            tileColor: Colors.white,
+
+              const SizedBox(height: 15),
+
+              // Name + optional blue verified tick
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (isVerified) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.verified_rounded,
+                        color: Color(0xFF1976D2), size: 22),
+                  ],
+                ],
+              ),
+
+              const SizedBox(height: 5),
+
+              Text(
+                area,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              _buildProfileOption(
+                Icons.person_outline_rounded,
+                'Edit Profile',
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AccountInfoScreen()),
+                  );
+                  _loadUserData();
+                },
+              ),
+
+              _buildProfileOption(
+                Icons.location_on_outlined,
+                'Location',
+                onTap: _showLocationBottomSheet,
+              ),
+
+              _buildProfileOption(
+                Icons.settings_outlined,
+                'Settings',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
+              ),
+
+              // Verify Profile option — shows tick status dynamically
+              _buildVerifyProfileOption(context, isVerified),
+
+              _buildProfileOption(
+                Icons.help_outline_rounded,
+                'Help & Support',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HelpSupportScreen()),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              ListTile(
+                onTap: _signOut,
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.red,
+                ),
+                title: const Text(
+                  'Sign Out',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                tileColor: Colors.white,
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1603,6 +2100,78 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         onTap: onTap ?? () {},
       ),
+    );
+  }
+
+  Widget _buildVerifyProfileOption(BuildContext context, bool isVerified) {
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('verificationRequests')
+          .where('userId', isEqualTo: _auth.currentUser?.uid ?? '')
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get(),
+      builder: (context, snapshot) {
+        final isPending =
+            snapshot.hasData && snapshot.data!.docs.isNotEmpty;
+
+        Widget? badge;
+        if (isVerified) {
+          badge = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.verified_rounded, color: Color(0xFF1976D2), size: 20),
+              SizedBox(width: 4),
+              Text('Verified',
+                  style: TextStyle(
+                      color: Color(0xFF1976D2),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12)),
+            ],
+          );
+        } else if (isPending) {
+          badge = Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'Pending',
+              style: TextStyle(
+                  color: Colors.orange.shade700,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11),
+            ),
+          );
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: ListTile(
+            leading: const Icon(
+              Icons.verified_user_rounded,
+              color: Color(0xFF1976D2),
+            ),
+            title: const Text(
+              'Verify Profile',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            trailing: badge ??
+                const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const VerificationScreen()),
+            ),
+          ),
+        );
+      },
     );
   }
 

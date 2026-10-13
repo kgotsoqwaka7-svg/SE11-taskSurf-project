@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -25,6 +26,27 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
   bool _isLoading = true;
   final ImagePicker _picker = ImagePicker();
 
+  ImageProvider? _getProfileImageProvider(String url) {
+    final clean = url.trim();
+    if (clean.isEmpty || clean == 'null') return null;
+    if (clean.startsWith('data:image')) {
+      try {
+        final base64String = clean.split(',').last;
+        return MemoryImage(base64Decode(base64String));
+      } catch (_) {
+        return null;
+      }
+    }
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      try {
+        return MemoryImage(base64Decode(clean));
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(clean);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -45,7 +67,14 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             _locationController.text = data['location'] ?? '';
             _aboutController.text = data['aboutMe'] ?? ''; // Fetch bio
             _skillsController.text = data['skills'] ?? ''; // Fetch skills
-            _existingImageUrl = data['profileImageUrl'] ?? '';
+            _existingImageUrl = (data['profileImageUrl'] ??
+                    data['photoUrl'] ??
+                    data['photoURL'] ??
+                    data['profilePicture'] ??
+                    data['profileImage'] ??
+                    user.photoURL ??
+                    '')
+                .toString();
             _isLoading = false;
           });
         }
@@ -57,7 +86,12 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
   }
 
   Future<void> _pickImage() async {
-    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 75,
+    );
     if (pickedFile != null) {
       setState(() {
         _selectedImage = File(pickedFile.path);
@@ -86,14 +120,29 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
               child: Stack(
                 alignment: Alignment.bottomRight,
                 children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey.shade200,
-                    backgroundImage: _selectedImage != null 
-                        ? FileImage(_selectedImage!) as ImageProvider
-                        : _existingImageUrl.isNotEmpty
-                            ? NetworkImage(_existingImageUrl)
-                            : const NetworkImage('https://i.pravatar.cc/150?img=44'),
+                  Builder(
+                    builder: (context) {
+                      final existingProvider = _getProfileImageProvider(_existingImageUrl);
+                      return CircleAvatar(
+                        radius: 50,
+                        backgroundColor: const Color(0xFFE3F2FD),
+                        backgroundImage: _selectedImage != null 
+                            ? FileImage(_selectedImage!) as ImageProvider
+                            : existingProvider,
+                        onBackgroundImageError: existingProvider != null
+                            ? (exception, stackTrace) {
+                                debugPrint('Error loading image: $exception');
+                              }
+                            : null,
+                        child: (_selectedImage == null && existingProvider == null)
+                            ? const Icon(
+                                Icons.person_rounded,
+                                color: Color(0xFF1976D2),
+                                size: 55,
+                              )
+                            : null,
+                      );
+                    },
                   ),
                   Container(
                     padding: const EdgeInsets.all(6),
@@ -142,7 +191,12 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
 
                   if (_selectedImage != null) {
                     try {
-                      await AuthenticationService().uploadProfilePicture(userID, _selectedImage!);
+                      final uploadedUrl = await AuthenticationService().uploadProfilePicture(userID, _selectedImage!);
+                      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+                        setState(() {
+                          _existingImageUrl = uploadedUrl;
+                        });
+                      }
                     } catch (e) {
                       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
                       return;

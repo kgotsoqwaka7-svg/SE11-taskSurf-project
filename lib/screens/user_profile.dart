@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,6 +6,28 @@ import 'account_info.dart';
 
 class UserProfileScreen extends StatelessWidget {
   const UserProfileScreen({super.key});
+
+  ImageProvider? _getProfileImageProvider(String? url) {
+    if (url == null) return null;
+    final clean = url.trim();
+    if (clean.isEmpty || clean == 'null') return null;
+    if (clean.startsWith('data:image')) {
+      try {
+        final base64String = clean.split(',').last;
+        return MemoryImage(base64Decode(base64String));
+      } catch (_) {
+        return null;
+      }
+    }
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      try {
+        return MemoryImage(base64Decode(clean));
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(clean);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +70,15 @@ class UserProfileScreen extends StatelessWidget {
 // Explicitly forcing them to be Strings using ?.toString()
 final String name = userData['name']?.toString() ?? 'New User';
 final String location = userData['location']?.toString() ?? 'Location not set';
-final String profileImageUrl = userData['profileImageUrl']?.toString() ?? '';
+final String profileImageUrl = (userData['profileImageUrl'] ??
+        userData['photoUrl'] ??
+        userData['photoURL'] ??
+        userData['profilePicture'] ??
+        userData['profileImage'] ??
+        currentUser.photoURL ??
+        '')
+    .toString()
+    .trim();
 final String aboutMe = userData['aboutMe']?.toString() ?? '';
 final String skillsString = userData['skills']?.toString() ?? '';
 
@@ -62,12 +93,27 @@ List<String> skillsList = skillsString.split(',').map((e) => e.trim()).where((e)
                       Center(
                         child: Column(
                           children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor: Colors.grey.shade200,
-                              backgroundImage: profileImageUrl.isNotEmpty
-                                  ? NetworkImage(profileImageUrl)
-                                  : const NetworkImage('https://i.pravatar.cc/150?img=44') as ImageProvider,
+                            Builder(
+                              builder: (context) {
+                                final profileProvider = _getProfileImageProvider(profileImageUrl);
+                                return CircleAvatar(
+                                  radius: 50,
+                                  backgroundColor: const Color(0xFFE3F2FD),
+                                  backgroundImage: profileProvider,
+                                  onBackgroundImageError: profileProvider != null
+                                      ? (exception, stackTrace) {
+                                          debugPrint('Error loading profile image: $exception');
+                                        }
+                                      : null,
+                                  child: profileProvider == null
+                                      ? const Icon(
+                                          Icons.person_rounded,
+                                          color: Color(0xFF1976D2),
+                                          size: 55,
+                                        )
+                                      : null,
+                                );
+                              },
                             ),
                             const SizedBox(height: 16),
                             Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),

@@ -158,7 +158,7 @@ class TaskDetailsScreen extends StatelessWidget {
                   const Divider(height: 1),
                   const SizedBox(height: 16),
                   
-                  // NEW: Live fetch of the Task Poster's Name and Profile Picture
+                  // LIVE FETCH OF POSTER (Includes Blue Tick)
                   FutureBuilder<DocumentSnapshot>(
                     future: FirebaseFirestore.instance.collection('Users').doc(providerId).get(),
                     builder: (context, snapshot) {
@@ -179,6 +179,7 @@ class TaskDetailsScreen extends StatelessWidget {
                       final userData = snapshot.data!.data() as Map<String, dynamic>;
                       final posterName = userData['name'] ?? 'Unknown User';
                       final posterImage = userData['profileImageUrl'] ?? '';
+                      final isVerified = userData['isVerified'] == true;
 
                       return Row(
                         children: [
@@ -195,9 +196,17 @@ class TaskDetailsScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text('Posted by', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                              Text(
-                                posterName,
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                              Row(
+                                children: [
+                                  Text(
+                                    posterName,
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                                  ),
+                                  if (isVerified) ...[
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.verified_rounded, color: Color(0xFF1976D2), size: 16),
+                                  ],
+                                ],
                               ),
                             ],
                           ),

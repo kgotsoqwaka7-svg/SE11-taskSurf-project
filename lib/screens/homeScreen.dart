@@ -12,7 +12,7 @@ import 'settings.dart';
 import 'my_applications_screen.dart';
 import 'help_support_screen.dart';
 import 'verification_screen.dart';
-import 'user_profile.dart'; // Make sure this matches your UserProfileScreen file name!
+import 'user_profile.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _area = 'Your area';
   String _role = 'findWork';
   String _profileImageUrl = '';
+  bool _isVerified = false; // Added to track verification status globally
 
   bool _isLoading = true;
 
@@ -105,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _fullName = data['name'] ?? 'User';
           _area = data['area'] ?? data['location'] ?? 'Your area';
           _role = data['role'] ?? 'findWork';
+          _isVerified = data['isVerified'] == true;
           _profileImageUrl = (data['profileImageUrl'] ??
                   data['photoUrl'] ??
                   data['photoURL'] ??
@@ -381,8 +383,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     category: data['category']?.toString() ?? 'General',
                     location: data['location']?.toString() ?? 'Location not specified',
                     payment: 'R${data['paymentAmount'] ?? 0}',
-                    date: 'Flexible',
-                    time: 'Anytime',
+                    // FETCHING EXACT DATE & TIME FROM FIRESTORE
+                    date: data['date']?.toString() ?? 'Flexible',
+                    time: data['time']?.toString() ?? 'Anytime',
                     distance: 'Nearby',
                     description: data['description']?.toString() ?? 'No description provided.',
                     providerId: data['creatorID']?.toString() ?? '',
@@ -524,6 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 20),
 
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const CircleAvatar(
                 radius: 24,
@@ -548,35 +552,62 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontSize: 14,
                       ),
                     ),
-                    Text(
-                      '${_fullName.split(' ').first} 👋',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          '${_fullName.split(' ').first} 👋',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (_isVerified) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.verified_rounded, color: Colors.white, size: 20),
+                        ],
+                      ],
                     ),
                   ],
                 ),
               ),
 
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  _role == 'findWork' ? 'Worker' : 'Provider',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _role == 'findWork' ? 'Worker' : 'Provider',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                  if (!_isVerified) ...[
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VerificationScreen())),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade400,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text('Verify Profile', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -816,8 +847,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         'Location not specified',
                     payment:
                         'R${data['paymentAmount'] ?? 0}',
-                    date: 'Flexible',
-                    time: 'Anytime',
+                    // FETCHING EXACT DATE & TIME FROM FIRESTORE
+                    date: data['date']?.toString() ?? 'Flexible',
+                    time: data['time']?.toString() ?? 'Anytime',
                     distance: distanceLabel,
                     description:
                         data['description']?.toString() ??
@@ -1646,6 +1678,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ADDED VERIFY ACTION TO PROVIDER ACTIONS
   Widget _buildProviderActions() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1676,6 +1709,16 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.history_rounded,
               title: 'History',
               onTap: () {},
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: _buildActionButton(
+              icon: Icons.verified_user_rounded,
+              title: 'Verify',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VerificationScreen())),
             ),
           ),
         ],

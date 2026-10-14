@@ -8,6 +8,8 @@ class TaskModel {
   final double paymentAmount;
   final int numOfWorkers;
   final String category;
+  final String date; // Added date
+  final String time; // Added time
 
   TaskModel({
     required this.taskID,
@@ -19,10 +21,12 @@ class TaskModel {
     required this.paymentAmount,
     required this.numOfWorkers,
     required this.category,
+    required this.date, // Added date
+    required this.time, // Added time
   });
 
-  Map<String, dynamic> toMap(){
-    return{
+  Map<String, dynamic> toMap() {
+    return {
       'taskID': taskID,
       'creatorID': creatorID,
       'title': title,
@@ -32,6 +36,8 @@ class TaskModel {
       'paymentAmount': paymentAmount,
       'numOfWorkers': numOfWorkers,
       'category': category,
+      'date': date, // Added date
+      'time': time, // Added time
     };
   }
 }

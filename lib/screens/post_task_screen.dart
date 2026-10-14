@@ -55,8 +55,8 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       _workersController.text = (widget.existingData!['numOfWorkers'] ?? '1').toString();
       _locationController.text = widget.existingData!['location'] ?? '';
       _descriptionController.text = widget.existingData!['description'] ?? '';
-      _dateController.text = widget.existingData!['taskDate'] ?? '';
-      _timeController.text = widget.existingData!['taskTime'] ?? '';
+      _dateController.text = widget.existingData!['date'] ?? '';
+      _timeController.text = widget.existingData!['time'] ?? '';
       _collectionController.text = widget.existingData!['collectionAddress'] ?? '';
       _deliveryController.text = widget.existingData!['deliveryAddress'] ?? '';
       _selectedCategory = widget.existingData!['category'];
@@ -125,8 +125,8 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
         'paymentAmount': double.tryParse(_budgetController.text.replaceAll('R', '').trim()) ?? 0.0,
         'numOfWorkers': int.tryParse(_workersController.text.trim()) ?? 1,
         'category': _selectedCategory,
-        'taskDate': _dateController.text.trim(),
-        'taskTime': _timeController.text.trim(),
+        'date': _dateController.text.trim(),
+        'time': _timeController.text.trim(),
       };
 
       // Only save delivery addresses if it is a delivery task
@@ -341,7 +341,7 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : Text(
-                          widget.taskId != null ? 'Update Task' : 'Post Task - It\'s Free',
+                          widget.taskId != null ? 'Update Task' : 'Post Task',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                 ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'account_info.dart'; 
+import 'verification_screen.dart'; // Added import for the verification screen
 
 class UserProfileScreen extends StatelessWidget {
   const UserProfileScreen({super.key});
@@ -69,6 +70,7 @@ class UserProfileScreen extends StatelessWidget {
 
                 final String name = userData['name']?.toString() ?? 'New User';
                 final String location = userData['location']?.toString() ?? 'Location not set';
+                final bool isVerified = userData['isVerified'] == true; // Fetch verification status
                 final String profileImageUrl = (userData['profileImageUrl'] ??
                         userData['photoUrl'] ??
                         userData['photoURL'] ??
@@ -109,7 +111,19 @@ class UserProfileScreen extends StatelessWidget {
                               },
                             ),
                             const SizedBox(height: 16),
-                            Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                            
+                            // Name with optional Blue Tick
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                                if (isVerified) ...[
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.verified_rounded, color: Color(0xFF1976D2), size: 24),
+                                ],
+                              ],
+                            ),
+                            
                             const SizedBox(height: 4),
                             Text(location, style: const TextStyle(fontSize: 16, color: Colors.grey)),
                             const SizedBox(height: 12),
@@ -160,6 +174,59 @@ class UserProfileScreen extends StatelessWidget {
                                 );
                               },
                             ),
+
+                            // Verify Profile Button (Shows if not verified)
+                            if (!isVerified) ...[
+                              const SizedBox(height: 16),
+                              FutureBuilder<QuerySnapshot>(
+                                future: FirebaseFirestore.instance
+                                    .collection('verificationRequests')
+                                    .where('userId', isEqualTo: currentUser.uid)
+                                    .where('status', isEqualTo: 'pending')
+                                    .limit(1)
+                                    .get(),
+                                builder: (context, reqSnapshot) {
+                                  final isPending = reqSnapshot.hasData && reqSnapshot.data!.docs.isNotEmpty;
+
+                                  if (isPending) {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade50,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: Colors.orange.shade200),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.hourglass_top_rounded, size: 18, color: Colors.orange.shade700),
+                                          const SizedBox(width: 6),
+                                          Text('Verification Pending', style: TextStyle(color: Colors.orange.shade700, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  return ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (context) => const VerificationScreen()),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.verified_user_rounded, size: 18),
+                                    label: const Text('Verify Account', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange.shade500,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ],
                         ),
                       ),

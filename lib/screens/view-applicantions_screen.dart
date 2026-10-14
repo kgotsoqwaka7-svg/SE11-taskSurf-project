@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'application_profile_screen.dart';
 import 'review_screen.dart'; 
 
 class ViewApplicationsScreen extends StatelessWidget {
@@ -10,6 +9,99 @@ class ViewApplicationsScreen extends StatelessWidget {
     super.key, 
     required this.taskId,
   });
+
+  void _showProfileDialog(
+    BuildContext context, {
+    required String name,
+    required String profilePic,
+    required bool isVerified,
+    required String rating,
+    required String reviews,
+    required String location,
+    required List<String> skills,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                  onPressed: () => Navigator.pop(ctx),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ),
+              CircleAvatar(
+                radius: 38,
+                backgroundColor: const Color(0xFFE7EDF8),
+                backgroundImage: profilePic.isNotEmpty ? NetworkImage(profilePic) : null,
+                child: profilePic.isEmpty ? const Icon(Icons.person, color: Color(0xFF1976D2), size: 38) : null,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  if (isVerified) ...[
+                    const SizedBox(width: 4),
+                    const Icon(Icons.verified_rounded, size: 18, color: Color(0xFF1976D2)),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ...List.generate(5, (index) => const Icon(Icons.star, size: 14, color: Colors.orange)),
+                  const SizedBox(width: 6),
+                  Text(rating, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange)),
+                  const SizedBox(width: 4),
+                  Text('($reviews reviews)', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(location, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('SKILLS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: skills.map((s) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF2FF), 
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(s, style: const TextStyle(fontSize: 11, color: Color(0xFF5C6BC0), fontWeight: FontWeight.w600)),
+                  )).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,9 +150,7 @@ class ViewApplicationsScreen extends StatelessWidget {
             final data = document.data() as Map<String, dynamic>;
 
             final String name = data['workerName']?.toString() ?? 'Unknown Worker';
-            final String workerId = data['workerId']?.toString() ?? ''; // Added to track who is being reviewed
-            final String rating = data['workerRating']?.toString() ?? '0.0';
-            final String reviews = data['reviewCount']?.toString() ?? '0'; 
+            final String workerId = data['workerId']?.toString() ?? '';
             final String price = data['proposedPrice'] != null ? 'R${data['proposedPrice']}' : 'No bid';
             final String location = data['workerLocation']?.toString() ?? 'Location unavailable';
             final String description = data['message']?.toString() ?? 'No application message provided.';
@@ -74,56 +164,111 @@ class ViewApplicationsScreen extends StatelessWidget {
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 14),
-              child: ApplicationCard(
-                name: name, rating: rating, reviews: reviews, distance: location,
-                price: price, applied: applied, description: description, skills: skills,
-                isAccepted: status == 'accepted', 
-                onRate: () async {
-                   // Fetch Task Details to pass to ReviewScreen
-                   String taskTitle = 'Task';
-                   String taskCategory = 'General';
-                   final taskDoc = await FirebaseFirestore.instance.collection('Tasks').doc(taskId).get();
-                   if (taskDoc.exists && taskDoc.data() != null) {
-                     taskTitle = taskDoc.data()!['title'] ?? 'Task';
-                     taskCategory = taskDoc.data()!['category'] ?? 'General';
-                   }
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('reviews').where('reviewedUserId', isEqualTo: workerId).snapshots(),
+                builder: (context, reviewSnap) {
+                  double avgRating = 0.0;
+                  int totalReviews = 0;
+                  if (reviewSnap.hasData && reviewSnap.data!.docs.isNotEmpty) {
+                    totalReviews = reviewSnap.data!.docs.length;
+                    double sum = 0.0;
+                    for (var doc in reviewSnap.data!.docs) {
+                      final rData = doc.data() as Map<String, dynamic>;
+                      sum += (rData['rating'] as num?)?.toDouble() ?? 0.0;
+                    }
+                    avgRating = sum / totalReviews;
+                  }
 
-                   if (context.mounted) {
-                     Navigator.push(
-                       context,
-                       MaterialPageRoute(
-                         builder: (context) => ReviewScreen(
-                           taskId: taskId,
-                           reviewedUserId: workerId,
-                           reviewedUserName: name,
-                           taskTitle: taskTitle,
-                           taskCategory: taskCategory,
-                           taskPayment: price,
-                         ),
-                       ),
-                     );
-                   }
-                },
-                onReject: () {
-                  showDialog(
-                    context: context,
-                    builder: (dialogContext) => AlertDialog(
-                      title: const Text('Reject Application?'),
-                      content: Text('Are you sure you want to reject $name\'s application?'),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                          onPressed: () { Navigator.pop(dialogContext); _updateApplicationStatus(document.id, 'rejected', context, name); },
-                          child: const Text('Reject'),
-                        ),
-                      ],
-                    ),
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('Users').doc(workerId).get(),
+                    builder: (context, userSnap) {
+                      bool isVerified = false;
+                      String profilePic = '';
+                      List<String> userProfileSkills = skills; 
+
+                      if (userSnap.hasData && userSnap.data!.exists) {
+                        final uData = userSnap.data!.data() as Map<String, dynamic>;
+                        isVerified = uData['isVerified'] == true;
+                        profilePic = uData['profileImageUrl'] ?? '';
+                        
+                        if (uData['skills'] != null && uData['skills'].toString().isNotEmpty) {
+                          userProfileSkills = uData['skills'].toString().split(',').map((e) => e.trim()).toList();
+                        }
+                      }
+
+                      return ApplicationCard(
+                        name: name, 
+                        rating: avgRating.toStringAsFixed(1), 
+                        reviews: totalReviews.toString(), 
+                        distance: location,
+                        price: price, 
+                        applied: applied, 
+                        description: description, 
+                        skills: skills,
+                        isAccepted: status == 'accepted', 
+                        isVerified: isVerified,
+                        profilePic: profilePic,
+                        onViewProfile: () {
+                          _showProfileDialog(
+                            context,
+                            name: name,
+                            profilePic: profilePic,
+                            isVerified: isVerified,
+                            rating: avgRating.toStringAsFixed(1),
+                            reviews: totalReviews.toString(),
+                            location: location,
+                            skills: userProfileSkills,
+                          );
+                        },
+                        onRate: () async {
+                           String taskTitle = 'Task';
+                           String taskCategory = 'General';
+                           final taskDoc = await FirebaseFirestore.instance.collection('Tasks').doc(taskId).get();
+                           if (taskDoc.exists && taskDoc.data() != null) {
+                             taskTitle = taskDoc.data()!['title'] ?? 'Task';
+                             taskCategory = taskDoc.data()!['category'] ?? 'General';
+                           }
+
+                           if (context.mounted) {
+                             Navigator.push(
+                               context,
+                               MaterialPageRoute(
+                                 builder: (context) => ReviewScreen(
+                                   taskId: taskId,
+                                   reviewedUserId: workerId,
+                                   reviewedUserName: name,
+                                   taskTitle: taskTitle,
+                                   taskCategory: taskCategory,
+                                   taskPayment: price,
+                                 ),
+                               ),
+                             );
+                           }
+                        },
+                        onReject: () {
+                          showDialog(
+                            context: context,
+                            builder: (dialogContext) => AlertDialog(
+                              title: const Text('Reject Application?'),
+                              content: Text('Are you sure you want to reject $name\'s application?'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                  onPressed: () { Navigator.pop(dialogContext); _updateApplicationStatus(document.id, 'rejected', context, name); },
+                                  child: const Text('Reject'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        onAccept: () async {
+                          await _updateApplicationStatus(document.id, 'accepted', context, name);
+                        },
+                      );
+                    }
                   );
-                },
-                onAccept: () async {
-                  await _updateApplicationStatus(document.id, 'accepted', context, name);
-                },
+                }
               ),
             );
           }).toList(),
@@ -154,14 +299,17 @@ class ApplicationCard extends StatelessWidget {
   final String description;
   final List<String> skills;
   final bool isAccepted;
+  final bool isVerified;
+  final String profilePic;
+  final VoidCallback onViewProfile;
   final VoidCallback onRate;
   final VoidCallback onReject;
   final VoidCallback onAccept;
 
   const ApplicationCard({
     super.key, required this.name, required this.rating, required this.reviews, required this.distance, required this.price,
-    required this.applied, required this.description, required this.skills, required this.isAccepted, required this.onRate,
-    required this.onReject, required this.onAccept,
+    required this.applied, required this.description, required this.skills, required this.isAccepted, required this.isVerified,
+    required this.profilePic, required this.onViewProfile, required this.onRate, required this.onReject, required this.onAccept,
   });
 
   @override
@@ -177,13 +325,26 @@ class ApplicationCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const CircleAvatar(radius: 22, backgroundColor: Color(0xFFE7EDF8), child: Icon(Icons.person, color: Color(0xFF1976D2))),
+              CircleAvatar(
+                radius: 22, 
+                backgroundColor: const Color(0xFFE7EDF8), 
+                backgroundImage: profilePic.isNotEmpty ? NetworkImage(profilePic) : null,
+                child: profilePic.isEmpty ? const Icon(Icons.person, color: Color(0xFF1976D2)) : null,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)), const SizedBox(width: 4), const Icon(Icons.verified, size: 14, color: Color(0xFF1976D2))]),
+                    Row(
+                      children: [
+                        Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)), 
+                        if (isVerified) ...[
+                          const SizedBox(width: 4), 
+                          const Icon(Icons.verified, size: 14, color: Color(0xFF1976D2)),
+                        ],
+                      ]
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -223,57 +384,75 @@ class ApplicationCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14), // slightly increased spacing before buttons
           
+          // REVISED LAYOUT: ALL 3 BUTTONS SIDE-BY-SIDE
           Row(
-            children: isAccepted
-              ? [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: onRate,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.orange, side: const BorderSide(color: Colors.orange),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11),
-                      ),
-                      child: const Text("Rate Worker", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
+            children: [
+              // 1. View Profile Button
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onViewProfile,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1976D2), // Makes text & ripple blue
+                    side: const BorderSide(color: Color(0xFF1976D2)), // Makes outline blue
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+                    padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 0),
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {}, 
-                      icon: const Icon(Icons.chat_bubble_outline, size: 14),
-                      label: const Text("Message", style: TextStyle(fontSize: 11)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1976D2), foregroundColor: Colors.white, elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11),
+                  child: const Text("View Profile", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+              const SizedBox(width: 6),
+              
+              // 2 & 3. Depending on status
+              ...isAccepted
+                  ? [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: onRate,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.orange, side: const BorderSide(color: Colors.orange),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 0),
+                          ),
+                          child: const Text("Rate", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold), maxLines: 1),
+                        ),
                       ),
-                    ),
-                  ),
-                ]
-              : [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: onReject,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red, side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {}, 
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1976D2), foregroundColor: Colors.white, elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 0),
+                          ),
+                          child: const Text("Message", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold), maxLines: 1),
+                        ),
                       ),
-                      child: const Text("Reject", style: TextStyle(fontSize: 11)),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: onAccept,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF12B981), foregroundColor: Colors.white, elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11),
+                    ]
+                  : [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: onReject,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red, side: const BorderSide(color: Colors.red),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 0),
+                          ),
+                          child: const Text("Reject", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold), maxLines: 1),
+                        ),
                       ),
-                      child: const Text("Accept", style: TextStyle(fontSize: 11)),
-                    ),
-                  ),
-                ],
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: onAccept,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF12B981), foregroundColor: Colors.white, elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 0),
+                          ),
+                          child: const Text("Accept", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold), maxLines: 1),
+                        ),
+                      ),
+                    ],
+            ],
           ),
         ],
       ),

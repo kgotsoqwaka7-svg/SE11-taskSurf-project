@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 class PostTaskScreen extends StatefulWidget {
   final String? taskId;
@@ -19,12 +20,17 @@ class PostTaskScreen extends StatefulWidget {
 class _PostTaskScreenState extends State<PostTaskScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers matching TaskModel requirements
   final _titleController = TextEditingController();
   final _budgetController = TextEditingController();
   final _workersController = TextEditingController(text: '1'); 
   final _locationController = TextEditingController();
   final _descriptionController = TextEditingController();
+  
+  // New Controllers
+  final _dateController = TextEditingController();
+  final _timeController = TextEditingController();
+  final _collectionController = TextEditingController();
+  final _deliveryController = TextEditingController();
 
   String? _selectedCategory;
   bool _isLoading = false;
@@ -43,13 +49,16 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
   @override
   void initState() {
     super.initState();
-    // If we are editing an existing task, pre-fill all the fields
     if (widget.existingData != null) {
       _titleController.text = widget.existingData!['title'] ?? '';
       _budgetController.text = (widget.existingData!['paymentAmount'] ?? '').toString();
       _workersController.text = (widget.existingData!['numOfWorkers'] ?? '1').toString();
       _locationController.text = widget.existingData!['location'] ?? '';
       _descriptionController.text = widget.existingData!['description'] ?? '';
+      _dateController.text = widget.existingData!['taskDate'] ?? '';
+      _timeController.text = widget.existingData!['taskTime'] ?? '';
+      _collectionController.text = widget.existingData!['collectionAddress'] ?? '';
+      _deliveryController.text = widget.existingData!['deliveryAddress'] ?? '';
       _selectedCategory = widget.existingData!['category'];
     }
   }
@@ -61,16 +70,43 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
     _workersController.dispose();
     _locationController.dispose();
     _descriptionController.dispose();
+    _dateController.dispose();
+    _timeController.dispose();
+    _collectionController.dispose();
+    _deliveryController.dispose();
     super.dispose();
+  }
+
+  Future<void> _selectDate() async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _dateController.text = DateFormat('yyyy-MM-dd').format(picked);
+      });
+    }
+  }
+
+  Future<void> _selectTime() async {
+    TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _timeController.text = picked.format(context);
+      });
+    }
   }
 
   Future<void> _submitTask() async {
     if (!_formKey.currentState!.validate()) return;
-
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a category')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a category')));
       return;
     }
 
@@ -80,7 +116,6 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) throw Exception('User not logged in');
 
-      // Create a map of the data to save
       final taskData = {
         'creatorID': currentUser.uid,
         'title': _titleController.text.trim(),
@@ -90,13 +125,19 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
         'paymentAmount': double.tryParse(_budgetController.text.replaceAll('R', '').trim()) ?? 0.0,
         'numOfWorkers': int.tryParse(_workersController.text.trim()) ?? 1,
         'category': _selectedCategory,
+        'taskDate': _dateController.text.trim(),
+        'taskTime': _timeController.text.trim(),
       };
 
+      // Only save delivery addresses if it is a delivery task
+      if (_selectedCategory == 'Delivery') {
+        taskData['collectionAddress'] = _collectionController.text.trim();
+        taskData['deliveryAddress'] = _deliveryController.text.trim();
+      }
+
       if (widget.taskId != null) {
-        // UPDATE EXISTING TASK
         await FirebaseFirestore.instance.collection('Tasks').doc(widget.taskId).update(taskData);
       } else {
-        // CREATE NEW TASK
         final docRef = FirebaseFirestore.instance.collection('Tasks').doc();
         taskData['taskID'] = docRef.id;
         await docRef.set(taskData);
@@ -104,18 +145,13 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.taskId != null ? 'Task successfully updated!' : 'Task successfully posted!'), 
-            backgroundColor: Colors.green
-          ),
+          SnackBar(content: Text(widget.taskId != null ? 'Task successfully updated!' : 'Task successfully posted!'), backgroundColor: Colors.green),
         );
-        Navigator.pop(context); // Return to the dashboard automatically
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving task: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving task: $e'), backgroundColor: Colors.red));
         setState(() => _isLoading = false);
       }
     }
@@ -169,25 +205,14 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
                       decoration: BoxDecoration(
                         color: isSelected ? themeColor : Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected ? themeColor : Colors.grey.shade300,
-                          width: isSelected ? 2 : 1,
-                        ),
+                        border: Border.all(color: isSelected ? themeColor : Colors.grey.shade300, width: isSelected ? 2 : 1),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(cat['icon'], color: isSelected ? Colors.white : Colors.grey.shade600, size: 24),
                           const SizedBox(height: 6),
-                          Text(
-                            cat['name'],
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isSelected ? Colors.white : Colors.grey.shade700,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
-                          ),
+                          Text(cat['name'], textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: isSelected ? Colors.white : Colors.grey.shade700, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                         ],
                       ),
                     ),
@@ -195,6 +220,24 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
                 },
               ),
               const SizedBox(height: 20),
+
+              // DYNAMIC DELIVERY FIELDS
+              if (_selectedCategory == 'Delivery') ...[
+                _buildLabel('COLLECTION ADDRESS *'),
+                TextFormField(
+                  controller: _collectionController,
+                  decoration: _inputDecoration('e.g. 123 Pick Up St'),
+                  validator: (val) => val == null || val.isEmpty ? 'Collection address required' : null,
+                ),
+                const SizedBox(height: 20),
+                _buildLabel('DELIVERY ADDRESS *'),
+                TextFormField(
+                  controller: _deliveryController,
+                  decoration: _inputDecoration('e.g. 456 Drop Off Ave'),
+                  validator: (val) => val == null || val.isEmpty ? 'Delivery address required' : null,
+                ),
+                const SizedBox(height: 20),
+              ],
               
               Row(
                 children: [
@@ -217,7 +260,7 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildLabel('WORKERS NEEDED *'),
+                        _buildLabel('WORKERS *'),
                         TextFormField(
                           controller: _workersController,
                           keyboardType: TextInputType.number,
@@ -230,8 +273,45 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
                 ],
               ),
               const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel('DATE *'),
+                        TextFormField(
+                          controller: _dateController,
+                          readOnly: true,
+                          onTap: _selectDate,
+                          decoration: _inputDecoration('Select Date').copyWith(suffixIcon: const Icon(Icons.calendar_today, size: 18)),
+                          validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel('TIME *'),
+                        TextFormField(
+                          controller: _timeController,
+                          readOnly: true,
+                          onTap: _selectTime,
+                          decoration: _inputDecoration('Select Time').copyWith(suffixIcon: const Icon(Icons.access_time, size: 18)),
+                          validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
               
-              _buildLabel('LOCATION *'),
+              _buildLabel('LOCATION (General Area) *'),
               TextFormField(
                 controller: _locationController,
                 decoration: _inputDecoration('e.g. Bellville, Cape Town'),
@@ -277,10 +357,7 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
-      ),
+      child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
     );
   }
 
@@ -291,18 +368,9 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF1976D2)),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1976D2))),
     );
   }
 }

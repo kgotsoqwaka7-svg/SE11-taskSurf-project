@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -86,20 +88,44 @@ class AuthenticationService {
 
   // Your Code
   Future<String?> uploadProfilePicture(String userID, File imageFile) async {
+    String? downloadUrl;
     try {
-      Reference ref = _storage.ref().child('profile_pictures').child('$userID.jpg');
-      UploadTask uploadTask = ref.putFile(imageFile);
-      TaskSnapshot snapshot = await uploadTask;
-      String downloadUrl = await snapshot.ref.getDownloadURL();
+      final Uint8List bytes = await imageFile.readAsBytes();
+
+      // 1. Try uploading to Firebase Storage with proper metadata
+      try {
+        Reference ref = _storage.ref().child('profile_pictures').child('$userID.jpg');
+        UploadTask uploadTask = ref.putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        TaskSnapshot snapshot = await uploadTask;
+        downloadUrl = await snapshot.ref.getDownloadURL();
+      } catch (storageError) {
+        debugPrint('Firebase Storage upload failed: $storageError. Falling back to direct database image storage.');
+      }
+
+      // 2. If Firebase Storage failed (e.g. storage rules / bucket unconfigured), fallback to base64 data URI in Firestore
+      if (downloadUrl == null || downloadUrl.isEmpty) {
+        downloadUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      }
       
-      await _firestore.collection('Users').doc(userID).update({
+      // 3. Persist to Firestore Users document
+      await _firestore.collection('Users').doc(userID).set({
         'profileImageUrl': downloadUrl,
-      });
+        'photoUrl': downloadUrl,
+      }, SetOptions(merge: true));
+
+      if (downloadUrl.startsWith('http')) {
+        try {
+          await _auth.currentUser?.updatePhotoURL(downloadUrl);
+        } catch (_) {}
+      }
       
       return downloadUrl; 
     } catch (e) {
-      print('Upload Error: $e');
-      return null;
+      debugPrint('Upload Error: $e');
+      rethrow;
     }
   }
 }

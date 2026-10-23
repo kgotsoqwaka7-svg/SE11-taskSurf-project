@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/chat_service.dart';
 import '../models/message_model.dart';
 
@@ -6,6 +7,7 @@ class ChatScreen extends StatefulWidget {
   final String taskId;
   final String taskTitle;
   final String providerId;
+  final String providerName;
   final String seekerId;
   final String seekerName;
   final String currentUserId;
@@ -15,6 +17,7 @@ class ChatScreen extends StatefulWidget {
     required this.taskId,
     required this.taskTitle,
     required this.providerId,
+    required this.providerName,
     required this.seekerId,
     required this.seekerName,
     required this.currentUserId,
@@ -31,6 +34,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   late String _conversationId;
   late String _receiverId;
+  String _resolvedOtherName = '';
 
   @override
   void initState() {
@@ -42,6 +46,45 @@ class _ChatScreenState extends State<ChatScreen> {
     _receiverId = (widget.currentUserId == widget.providerId)
         ? widget.seekerId
         : widget.providerId;
+
+    _fetchRealUserName();
+  }
+
+  /// Automatically resolves real target name from Firestore if missing/generic
+  Future<void> _fetchRealUserName() async {
+    final bool isProvider = widget.currentUserId == widget.providerId;
+    final String initialName = isProvider ? widget.seekerName : widget.providerName;
+
+    if (initialName.isNotEmpty &&
+        initialName != 'Seeker' &&
+        initialName != 'Job Provider' &&
+        initialName != 'Applicant' &&
+        initialName != 'Chat with Seeker') {
+      if (mounted) setState(() => _resolvedOtherName = initialName);
+      return;
+    }
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(_receiverId)
+          .get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        final data = userDoc.data()!;
+        final name = data['name'] ?? data['fullName'] ?? data['displayName'] ?? data['username'];
+        if (name != null && name.toString().trim().isNotEmpty) {
+          if (mounted) setState(() => _resolvedOtherName = name.toString().trim());
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _resolvedOtherName = isProvider ? 'Applicant' : 'Job Provider';
+      });
+    }
   }
 
   @override
@@ -63,6 +106,7 @@ class _ChatScreenState extends State<ChatScreen> {
       taskId: widget.taskId,
       taskTitle: widget.taskTitle,
       providerId: widget.providerId,
+      providerName: widget.providerName,
       seekerId: widget.seekerId,
       seekerName: widget.seekerName,
       content: text,
@@ -72,6 +116,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     const themeColor = Color(0xFF1976D2);
+    final bool isProvider = widget.currentUserId == widget.providerId;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F9FF),
@@ -87,9 +132,9 @@ class _ChatScreenState extends State<ChatScreen> {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             Text(
-              widget.currentUserId == widget.providerId
-                  ? 'Applicant: ${widget.seekerName}'
-                  : 'Job Provider',
+              isProvider
+                  ? 'Applicant: ${_resolvedOtherName.isNotEmpty ? _resolvedOtherName : widget.seekerName}'
+                  : 'Provider: ${_resolvedOtherName.isNotEmpty ? _resolvedOtherName : widget.providerName}',
               style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ],
@@ -119,7 +164,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 final messages = snapshot.data!;
 
                 return ListView.builder(
-                  reverse: true, // Show newest messages at bottom
+                  reverse: true,
                   controller: _scrollController,
                   padding: const EdgeInsets.all(12.0),
                   itemCount: messages.length,

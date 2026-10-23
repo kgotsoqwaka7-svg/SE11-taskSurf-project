@@ -70,6 +70,7 @@ class TaskDetailsScreen extends StatelessWidget {
           taskId: taskId,
           taskTitle: title,
           providerId: providerId,
+          providerName: 'Job Provider',
           seekerId: currentUser.uid,
           seekerName: currentUser.displayName ?? 'Seeker',
           currentUserId: currentUser.uid,

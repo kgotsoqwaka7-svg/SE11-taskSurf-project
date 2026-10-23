@@ -7,7 +7,7 @@ class ChatScreen extends StatefulWidget {
   final String taskId;
   final String taskTitle;
   final String providerId;
-  final String providerName;
+  final String providerName; // Added missing parameter
   final String seekerId;
   final String seekerName;
   final String currentUserId;
@@ -17,7 +17,7 @@ class ChatScreen extends StatefulWidget {
     required this.taskId,
     required this.taskTitle,
     required this.providerId,
-    required this.providerName,
+    required this.providerName, // Added missing parameter
     required this.seekerId,
     required this.seekerName,
     required this.currentUserId,

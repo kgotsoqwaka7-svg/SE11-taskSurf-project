@@ -12,6 +12,7 @@ class ChatService {
     required String taskId,
     required String taskTitle,
     required String providerId,
+    required String providerName,
     required String seekerId,
     required String seekerName,
     required String content,
@@ -23,7 +24,7 @@ class ChatService {
 
     final DateTime now = DateTime.now();
 
-    // 1. Create message model
+    // Create message model
     final message = MessageModel(
       senderId: senderId,
       receiverId: receiverId,
@@ -33,19 +34,20 @@ class ChatService {
       timestamp: now,
     );
 
-    // 2. Add message to the 'messages' subcollection inside conversation
+    // Add message to the 'messages' subcollection inside conversation
     await _firestore
         .collection('conversations')
         .doc(conversationId)
         .collection('messages')
         .add(message.toMap());
 
-    // 3. Update top-level conversation metadata for the inbox view
+    // Update top-level conversation metadata for the inbox view
     final conversationSummary = ConversationModel(
       conversationId: conversationId,
       taskId: taskId,
       taskTitle: taskTitle,
       providerId: providerId,
+      providerName: providerName,
       seekerId: seekerId,
       seekerName: seekerName,
       lastMessage: content.trim(),
@@ -74,20 +76,19 @@ class ChatService {
   }
 
   /// Streams all conversations involving the logged-in user (for the inbox)
-Stream<List<ConversationModel>> getUserConversations(String userId) {
-  return _firestore
-      .collection('conversations')
-      .where('participants', arrayContains: userId)
-      .snapshots()
-      .map((snapshot) {
-    final conversations = snapshot.docs
-        .map((doc) => ConversationModel.fromMap(doc.data()))
-        .toList();
+  Stream<List<ConversationModel>> getUserConversations(String userId) {
+    return _firestore
+        .collection('conversations')
+        .where('participants', arrayContains: userId)
+        .snapshots()
+        .map((snapshot) {
+      final conversations = snapshot.docs
+          .map((doc) => ConversationModel.fromMap(doc.data()))
+          .toList();
 
-    // Sort locally by lastUpdated descending to avoid missing Firestore index errors
-    conversations.sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
+      conversations.sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
 
-    return conversations;
-  });
-}
+      return conversations;
+    });
+  }
 }

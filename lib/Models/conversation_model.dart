@@ -5,6 +5,7 @@ class ConversationModel {
   final String taskId;
   final String taskTitle;
   final String providerId;
+  final String providerName;
   final String seekerId;
   final String seekerName;
   final String lastMessage;
@@ -15,6 +16,7 @@ class ConversationModel {
     required this.taskId,
     required this.taskTitle,
     required this.providerId,
+    required this.providerName,
     required this.seekerId,
     required this.seekerName,
     required this.lastMessage,
@@ -27,11 +29,12 @@ class ConversationModel {
       'taskId': taskId,
       'taskTitle': taskTitle,
       'providerId': providerId,
+      'providerName': providerName,
       'seekerId': seekerId,
       'seekerName': seekerName,
       'lastMessage': lastMessage,
       'lastUpdated': Timestamp.fromDate(lastUpdated),
-      'participants': [providerId, seekerId], // Allows simple Firestore querying
+      'participants': [providerId, seekerId],
     };
   }
 
@@ -41,6 +44,7 @@ class ConversationModel {
       taskId: map['taskId'] ?? '',
       taskTitle: map['taskTitle'] ?? '',
       providerId: map['providerId'] ?? '',
+      providerName: map['providerName'] ?? '',
       seekerId: map['seekerId'] ?? '',
       seekerName: map['seekerName'] ?? '',
       lastMessage: map['lastMessage'] ?? '',

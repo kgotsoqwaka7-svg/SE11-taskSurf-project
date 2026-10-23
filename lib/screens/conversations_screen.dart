@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/conversation_model.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
@@ -10,6 +11,59 @@ class ConversationsScreen extends StatelessWidget {
     super.key,
     required this.currentUserId,
   });
+
+  /// Fetches the real user name from the 'Users' collection if generic or empty
+  Future<String> _resolveUserName({
+    required String targetUserId,
+    required String rawName,
+    required bool isProviderView,
+  }) async {
+    final cleanName = rawName.trim();
+    
+    // Ignore generic placeholder strings
+    final isGeneric = cleanName.isEmpty ||
+        cleanName == 'Seeker' ||
+        cleanName == 'Job Provider' ||
+        cleanName == 'Applicant' ||
+        cleanName == 'Chat with Seeker';
+
+    if (!isGeneric) {
+      return cleanName;
+    }
+
+    try {
+      // 1. Try direct Document ID lookup in 'Users' collection
+      var userDoc = await FirebaseFirestore.instance
+          .collection('Users') // Capital 'Users' as shown in your Firestore Console
+          .doc(targetUserId)
+          .get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        final data = userDoc.data()!;
+        final name = data['name'] ?? data['fullName'] ?? data['displayName'];
+        if (name != null && name.toString().trim().isNotEmpty) {
+          return name.toString().trim();
+        }
+      }
+
+      // 2. Query by 'userID' field if doc ID differs
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('Users')
+          .where('userID', isEqualTo: targetUserId)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final data = querySnapshot.docs.first.data();
+        final name = data['name'] ?? data['fullName'] ?? data['displayName'];
+        if (name != null && name.toString().trim().isNotEmpty) {
+          return name.toString().trim();
+        }
+      }
+    } catch (_) {}
+
+    return isProviderView ? 'Applicant' : 'Job Provider';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +101,6 @@ class ConversationsScreen extends StatelessWidget {
 
           final conversations = snapshot.data!;
 
-          // Group conversations by taskId for organized provider view
           final Map<String, List<ConversationModel>> groupedConversations = {};
           for (var conv in conversations) {
             groupedConversations.putIfAbsent(conv.taskId, () => []).add(conv);
@@ -64,7 +117,6 @@ class ConversationsScreen extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Task Section Header
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
@@ -80,54 +132,65 @@ class ConversationsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // Individual Applicant / Inquiry Rows
                   ...taskConversations.map((conv) {
                     final bool isProvider = currentUserId == conv.providerId;
-                    final String displayTitle =
-                        isProvider ? 'Chat with ${conv.seekerName}' : 'Job Provider';
+                    final String otherUserId =
+                        isProvider ? conv.seekerId : conv.providerId;
+                    final String rawName =
+                        isProvider ? conv.seekerName : conv.providerName;
 
-                    return Container(
-                      color: Colors.white,
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: themeColor,
-                          foregroundColor: Colors.white,
-                          child: Text(
-                            isProvider
-                                ? (conv.seekerName.isNotEmpty
-                                    ? conv.seekerName[0].toUpperCase()
-                                    : 'A')
-                                : 'P',
-                          ),
-                        ),
-                        title: Text(
-                          displayTitle,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          conv.lastMessage,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.grey.shade600),
-                        ),
-                        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ChatScreen(
-                                taskId: conv.taskId,
-                                taskTitle: conv.taskTitle,
-                                providerId: conv.providerId,
-                                seekerId: conv.seekerId,
-                                seekerName: conv.seekerName,
-                                currentUserId: currentUserId,
-                              ),
-                            ),
-                          );
-                        },
+                    return FutureBuilder<String>(
+                      future: _resolveUserName(
+                        targetUserId: otherUserId,
+                        rawName: rawName,
+                        isProviderView: isProvider,
                       ),
+                      builder: (context, nameSnapshot) {
+                        final displayName = nameSnapshot.data ??
+                            (isProvider ? 'Applicant' : 'Job Provider');
+                        final initial = displayName.isNotEmpty
+                            ? displayName[0].toUpperCase()
+                            : '?';
+
+                        return Container(
+                          color: Colors.white,
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: themeColor,
+                              foregroundColor: Colors.white,
+                              child: Text(initial),
+                            ),
+                            title: Text(
+                              displayName,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            subtitle: Text(
+                              conv.lastMessage,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
+                            trailing:
+                                const Icon(Icons.chevron_right, color: Colors.grey),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChatScreen(
+                                    taskId: conv.taskId,
+                                    taskTitle: conv.taskTitle,
+                                    providerId: conv.providerId,
+                                    providerName: conv.providerName,
+                                    seekerId: conv.seekerId,
+                                    seekerName: conv.seekerName,
+                                    currentUserId: currentUserId,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
                     );
                   }),
                   Divider(height: 1, color: Colors.grey.shade300),

@@ -27,4 +27,8 @@ TaskSurf is a C2C mobile freelance marketplace application designed to connect u
 ### Installation
 1. Clone the repository:
    ```bash
+<<<<<<< HEAD
    git clone [https://github.com/kgotsoqwaka7-svg/SE11-taskSurf-project.git](https://github.com/kgotsoqwaka7-svg/SE11-taskSurf-project.git)
+=======
+   git clone [https://github.com/kgotsoqwaka7-svg/SE11-taskSurf-project.git](https://github.com/kgotsoqwaka7-svg/SE11-taskSurf-project.git)
+>>>>>>> 2426b58f608adc0ccbf35dac2d46675abbae5e04

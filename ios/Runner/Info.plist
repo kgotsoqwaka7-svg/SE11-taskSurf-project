@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TaskSurf requires access to your location to suggest nearby tasks and filter by distance.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>TaskSurf requires access to your location to suggest nearby tasks and filter by distance.</string>
 </dict>
 </plist>

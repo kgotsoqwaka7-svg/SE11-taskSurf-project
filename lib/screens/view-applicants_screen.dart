@@ -200,6 +200,7 @@ class ViewApplicationsScreen extends StatelessWidget {
                         isVerified = uData['isVerified'] == true;
                         profilePic = uData['profileImageUrl'] ?? '';
                         
+<<<<<<< HEAD
                         // Override the old application data with fresh live data
                         if (uData['name'] != null && uData['name'].toString().trim().isNotEmpty) {
                           liveName = uData['name'];
@@ -209,6 +210,11 @@ class ViewApplicationsScreen extends StatelessWidget {
                         }
                         if (uData['skills'] != null && uData['skills'].toString().trim().isNotEmpty) {
                           liveSkills = uData['skills'].toString().split(',').map((e) => e.trim()).toList();
+=======
+                        // Fetches live skills directly from the user's database entry
+                        if (uData['skills'] != null && uData['skills'].toString().isNotEmpty) {
+                          userProfileSkills = uData['skills'].toString().split(',').map((e) => e.trim()).toList();
+>>>>>>> 2426b58f608adc0ccbf35dac2d46675abbae5e04
                         }
                       }
 
@@ -225,7 +231,11 @@ class ViewApplicationsScreen extends StatelessWidget {
                         isVerified: isVerified,
                         profilePic: profilePic,
                         onViewProfile: () {
+<<<<<<< HEAD
                           // Fix: Passes live name and live location to the popup
+=======
+                          // Triggers popup with real live data
+>>>>>>> 2426b58f608adc0ccbf35dac2d46675abbae5e04
                           _showProfileDialog(
                             context,
                             name: liveName,

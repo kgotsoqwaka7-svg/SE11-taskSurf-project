@@ -2528,17 +2528,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomNavigationBar(bool isWorker) {
-    return NavigationBar(
+  return NavigationBarTheme(
+    data: NavigationBarThemeData(
+      labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) {
+        final isSelected = states.contains(WidgetState.selected);
+        return TextStyle(
+          fontSize: 11, // Reduced from default 12 to fit 5 items cleanly
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          color: isSelected ? const Color(0xFF1976D2) : Colors.black87,
+          overflow: TextOverflow.ellipsis,
+        );
+      }),
+    ),
+    child: NavigationBar(
       selectedIndex: _selectedIndex,
       onDestinationSelected: _onBottomNavTapped,
       backgroundColor: Colors.white,
       elevation: 5,
       indicatorColor: const Color(0xFFE3F2FD),
       height: 70,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       destinations: [
-        NavigationDestination(
-          icon: const Icon(Icons.home_outlined),
-          selectedIcon: const Icon(
+        const NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(
             Icons.home_rounded,
             color: Color(0xFF1976D2),
           ),
@@ -2566,27 +2579,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 : Icons.add_task_rounded,
             color: const Color(0xFF1976D2),
           ),
-          label: isWorker ? 'Applications' : 'My Tasks',
+          label: isWorker ? 'Applications' : 'My Tasks', // Option A: 'Applied' or Option B: keep 'Applications'
         ),
 
-        NavigationDestination(
-          icon: const Icon(Icons.chat_bubble_outline_rounded),
-          selectedIcon: const Icon(
+        const NavigationDestination(
+          icon: Icon(Icons.chat_bubble_outline_rounded),
+          selectedIcon: Icon(
             Icons.chat_bubble_rounded,
             color: Color(0xFF1976D2),
           ),
           label: 'Messages',
         ),
 
-        NavigationDestination(
-          icon: const Icon(Icons.person_outline_rounded),
-          selectedIcon: const Icon(
+        const NavigationDestination(
+          icon: Icon(Icons.person_outline_rounded),
+          selectedIcon: Icon(
             Icons.person_rounded,
             color: Color(0xFF1976D2),
           ),
           label: 'Profile',
         ),
       ],
-    );
+     ),
+   );
   }
 }

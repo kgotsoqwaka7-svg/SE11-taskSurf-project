@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'view-applicants_screen.dart';
+import 'view_applicants_screen.dart';
 import 'post_task_screen.dart';
 
 class TaskProviderDashboard extends StatelessWidget {

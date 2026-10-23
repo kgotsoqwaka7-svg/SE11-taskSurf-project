@@ -67,7 +67,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
       setState(() => _selectedDocument = picked); 
     }
   }
-
+  /// Submits the user's ID document for admin review.
+  /// This function enforces a strict client-side file size limit (~900KB) to ensure 
+  /// compliance with Firestore's hard 1MB document size cap. The image is encoded into 
+  /// a raw Base64 string and directly embedded in the Firestore document, completely 
+  /// bypassing the need for a separate Firebase Storage bucket
   Future<void> _submitVerification() async {
     if (_selectedDocument == null) {
       ScaffoldMessenger.of(context).showSnackBar(

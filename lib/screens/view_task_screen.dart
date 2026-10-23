@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import '../models/report_model.dart';
 import '../screens/report_screen.dart';
 import 'chat_screen.dart';
@@ -186,7 +187,11 @@ class TaskDetailsScreen extends StatelessWidget {
                           CircleAvatar(
                             radius: 18,
                             backgroundColor: const Color(0xFFE3F2FD),
-                            backgroundImage: posterImage.isNotEmpty ? NetworkImage(posterImage) : null,
+                            backgroundImage: posterImage.isNotEmpty
+                                ? (posterImage.startsWith('data:image')
+                                    ? MemoryImage(base64Decode(posterImage.split(',').last)) as ImageProvider
+                                    : NetworkImage(posterImage))
+                                : null,
                             child: posterImage.isEmpty
                                 ? const Icon(Icons.person, size: 18, color: Color(0xFF1976D2))
                                 : null,

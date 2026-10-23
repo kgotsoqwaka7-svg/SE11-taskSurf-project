@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import 'review_screen.dart'; 
 
 class ViewApplicationsScreen extends StatelessWidget {
@@ -41,7 +42,11 @@ class ViewApplicationsScreen extends StatelessWidget {
               CircleAvatar(
                 radius: 38,
                 backgroundColor: const Color(0xFFE7EDF8),
-                backgroundImage: profilePic.isNotEmpty ? NetworkImage(profilePic) : null,
+                backgroundImage: profilePic.isNotEmpty
+                    ? (profilePic.startsWith('data:image')
+                        ? MemoryImage(base64Decode(profilePic.split(',').last)) as ImageProvider
+                        : NetworkImage(profilePic))
+                    : null,
                 child: profilePic.isEmpty ? const Icon(Icons.person, color: Color(0xFF1976D2), size: 38) : null,
               ),
               const SizedBox(height: 12),
@@ -155,7 +160,7 @@ class ViewApplicationsScreen extends StatelessWidget {
             final String location = data['workerLocation']?.toString() ?? 'Location unavailable';
             final String description = data['message']?.toString() ?? 'No application message provided.';
             
-            final List<String> skills = data['skills'] != null ? List<String>.from(data['skills']) : ["No specific skills listed"];
+            final List<String> applicationSkills = data['skills'] != null ? List<String>.from(data['skills']) : ["No specific skills listed"];
             String applied = 'Recently';
             if (data['appliedAt'] is Timestamp) {
               final date = (data['appliedAt'] as Timestamp).toDate();
@@ -184,40 +189,52 @@ class ViewApplicationsScreen extends StatelessWidget {
                     builder: (context, userSnap) {
                       bool isVerified = false;
                       String profilePic = '';
-                      List<String> userProfileSkills = skills; 
+                      
+                      // Variables to hold the strictly live data
+                      String liveName = name;
+                      String liveLocation = location;
+                      List<String> liveSkills = applicationSkills;
 
                       if (userSnap.hasData && userSnap.data!.exists) {
                         final uData = userSnap.data!.data() as Map<String, dynamic>;
                         isVerified = uData['isVerified'] == true;
                         profilePic = uData['profileImageUrl'] ?? '';
                         
-                        if (uData['skills'] != null && uData['skills'].toString().isNotEmpty) {
-                          userProfileSkills = uData['skills'].toString().split(',').map((e) => e.trim()).toList();
+                        // Override the old application data with fresh live data
+                        if (uData['name'] != null && uData['name'].toString().trim().isNotEmpty) {
+                          liveName = uData['name'];
+                        }
+                        if (uData['area'] != null && uData['area'].toString().trim().isNotEmpty) {
+                          liveLocation = uData['area'];
+                        }
+                        if (uData['skills'] != null && uData['skills'].toString().trim().isNotEmpty) {
+                          liveSkills = uData['skills'].toString().split(',').map((e) => e.trim()).toList();
                         }
                       }
 
                       return ApplicationCard(
-                        name: name, 
+                        name: liveName, 
                         rating: avgRating.toStringAsFixed(1), 
                         reviews: totalReviews.toString(), 
-                        distance: location,
+                        distance: liveLocation, 
                         price: price, 
                         applied: applied, 
                         description: description, 
-                        skills: skills,
+                        skills: liveSkills, // Fix: Passes live skills to the card view
                         isAccepted: status == 'accepted', 
                         isVerified: isVerified,
                         profilePic: profilePic,
                         onViewProfile: () {
+                          // Fix: Passes live name and live location to the popup
                           _showProfileDialog(
                             context,
-                            name: name,
+                            name: liveName,
                             profilePic: profilePic,
                             isVerified: isVerified,
                             rating: avgRating.toStringAsFixed(1),
                             reviews: totalReviews.toString(),
-                            location: location,
-                            skills: userProfileSkills,
+                            location: liveLocation,
+                            skills: liveSkills,
                           );
                         },
                         onRate: () async {
@@ -236,7 +253,7 @@ class ViewApplicationsScreen extends StatelessWidget {
                                  builder: (context) => ReviewScreen(
                                    taskId: taskId,
                                    reviewedUserId: workerId,
-                                   reviewedUserName: name,
+                                   reviewedUserName: liveName,
                                    taskTitle: taskTitle,
                                    taskCategory: taskCategory,
                                    taskPayment: price,
@@ -250,12 +267,12 @@ class ViewApplicationsScreen extends StatelessWidget {
                             context: context,
                             builder: (dialogContext) => AlertDialog(
                               title: const Text('Reject Application?'),
-                              content: Text('Are you sure you want to reject $name\'s application?'),
+                              content: Text('Are you sure you want to reject $liveName\'s application?'),
                               actions: [
                                 TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                                  onPressed: () { Navigator.pop(dialogContext); _updateApplicationStatus(document.id, 'rejected', context, name); },
+                                  onPressed: () { Navigator.pop(dialogContext); _updateApplicationStatus(document.id, 'rejected', context, liveName); },
                                   child: const Text('Reject'),
                                 ),
                               ],
@@ -263,7 +280,7 @@ class ViewApplicationsScreen extends StatelessWidget {
                           );
                         },
                         onAccept: () async {
-                          await _updateApplicationStatus(document.id, 'accepted', context, name);
+                          await _updateApplicationStatus(document.id, 'accepted', context, liveName);
                         },
                       );
                     }
@@ -328,7 +345,11 @@ class ApplicationCard extends StatelessWidget {
               CircleAvatar(
                 radius: 22, 
                 backgroundColor: const Color(0xFFE7EDF8), 
-                backgroundImage: profilePic.isNotEmpty ? NetworkImage(profilePic) : null,
+                backgroundImage: profilePic.isNotEmpty
+                    ? (profilePic.startsWith('data:image')
+                        ? MemoryImage(base64Decode(profilePic.split(',').last)) as ImageProvider
+                        : NetworkImage(profilePic))
+                    : null,
                 child: profilePic.isEmpty ? const Icon(Icons.person, color: Color(0xFF1976D2)) : null,
               ),
               const SizedBox(width: 10),
@@ -384,18 +405,16 @@ class ApplicationCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 14), // slightly increased spacing before buttons
+          const SizedBox(height: 14), 
           
-          // REVISED LAYOUT: ALL 3 BUTTONS SIDE-BY-SIDE
           Row(
             children: [
-              // 1. View Profile Button
               Expanded(
                 child: OutlinedButton(
                   onPressed: onViewProfile,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF1976D2), // Makes text & ripple blue
-                    side: const BorderSide(color: Color(0xFF1976D2)), // Makes outline blue
+                    foregroundColor: const Color(0xFF1976D2), 
+                    side: const BorderSide(color: Color(0xFF1976D2)), 
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
                     padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 0),
                   ),
@@ -404,7 +423,6 @@ class ApplicationCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               
-              // 2 & 3. Depending on status
               ...isAccepted
                   ? [
                       Expanded(

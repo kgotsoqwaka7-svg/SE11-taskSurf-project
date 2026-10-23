@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'view_task_screen.dart'; // Make sure this import matches your file name!
-import 'review_screen.dart'; // Make sure this import matches your file name!
+import 'view_task_screen.dart'; 
+import 'review_screen.dart';
 
 class MyApplicationsScreen extends StatelessWidget {
   const MyApplicationsScreen({super.key});
@@ -188,8 +188,8 @@ class MyApplicationsScreen extends StatelessWidget {
                             category: taskData['category'] ?? 'General',
                             location: taskData['location'] ?? 'Location not specified',
                             payment: 'R${taskData['paymentAmount'] ?? price}',
-                            date: taskData['taskDate'] ?? 'Flexible',
-                            time: taskData['taskTime'] ?? 'Anytime',
+                            date: taskData['date'] ?? 'Flexible',
+                            time: taskData['time'] ?? 'Anytime',
                             distance: 'Nearby',
                             description: taskData['description'] ?? 'No description provided.',
                             providerId: providerId,

@@ -53,7 +53,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
       default: return "Select a rating";
     }
   }
-
+   /// Constructs and securely pushes a new user review to the Firestore 'reviews' collection.
+  /// It enforces authentication and rating validation before proceeding. 
+  /// The payload includes the selected star rating, text comment, positive attribute tags, 
+  /// and a server-side timestamp to ensure accurate sorting later.
   Future<void> submitReview() async {
     if (selectedRating == 0) {
       ScaffoldMessenger.of(context).showSnackBar(

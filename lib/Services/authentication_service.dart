@@ -10,7 +10,7 @@ class AuthenticationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  // From Teammate's Code
+  
   User? get currentUser => _auth.currentUser;
 
   // UPDATED: Checks for suspension immediately upon login
@@ -45,7 +45,6 @@ class AuthenticationService {
     return userCredential;
   }
 
-  // Your Code (Updated to include default isSuspended field)
   Future<void> registerUser({
     required String name,
     required String email,

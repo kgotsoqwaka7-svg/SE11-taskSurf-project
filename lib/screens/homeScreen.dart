@@ -43,6 +43,8 @@ class _HomeScreenState extends State<HomeScreen> {
   double? _customRadiusKm;             // stores user-entered custom radius
   bool _isCustomRadius = false;        // true when custom radius is active
   Position? _userPosition;             // cached device position for radius filter
+  final Map<String, List<double>> _taskCoordCache = {}; // Cache geocoded coords for tasks missing lat/lng
+  bool _isFetchingUserPosition = false;
 
   static const List<String> _categories = [
     'Cleaning', 'Repairs', 'Gardening', 'Delivery',
@@ -59,8 +61,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-    _fetchUserPosition();
+    _initializeHome();
+  }
+
+  Future<void> _initializeHome() async {
+    await _loadUserData();
+    if (!mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fetchUserPosition();
+    });
   }
 
   @override
@@ -69,22 +79,90 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  /// Quietly fetches the device's GPS position and caches it for radius filtering.
+  /// Fetches the device's GPS position, with fallback to geocoding the user's saved area if GPS is disabled or denied.
   Future<void> _fetchUserPosition() async {
+    if (_isFetchingUserPosition) return;
+    _isFetchingUserPosition = true;
+
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
+        if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+          Position? position;
+          try {
+            position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+                timeLimit: Duration(seconds: 8),
+              ),
+            );
+          } catch (error) {
+            debugPrint('Could not get current location: $error');
+            try {
+              position = await Geolocator.getLastKnownPosition();
+            } catch (lastKnownError) {
+              debugPrint('Could not get last known location: $lastKnownError');
+            }
+          }
+
+          if (position != null) {
+            if (mounted) {
+              setState(() => _userPosition = position);
+            }
+
+            final user = _auth.currentUser;
+            if (user != null) {
+              try {
+                await _firestore.collection('Users').doc(user.uid).set({
+                  'latitude': position.latitude,
+                  'longitude': position.longitude,
+                }, SetOptions(merge: true));
+              } catch (error) {
+                debugPrint('Could not save user location: $error');
+              }
+            }
+          }
+        } else {
+          debugPrint('Location permission is not granted: $permission');
+        }
+      } else {
+        debugPrint('Location services are disabled.');
       }
-      if (permission == LocationPermission.deniedForever) return;
+    } catch (error) {
+      debugPrint('Could not access device location: $error');
+    } finally {
+      _isFetchingUserPosition = false;
+    }
 
-      final pos = await Geolocator.getCurrentPosition();
-      if (mounted) setState(() => _userPosition = pos);
-    } catch (_) {}
+    // Fallback: If device GPS couldn't be obtained, resolve coordinates from the saved user area/location
+    if (_userPosition == null && _area.isNotEmpty && _area != 'Your area') {
+      try {
+        final locs = await Geocoding().locationFromAddress(_area);
+        if (locs.isNotEmpty && mounted) {
+          setState(() {
+            _userPosition = Position(
+              latitude: locs.first.latitude,
+              longitude: locs.first.longitude,
+              timestamp: DateTime.now(),
+              accuracy: 0,
+              altitude: 0,
+              heading: 0,
+              speed: 0,
+              speedAccuracy: 0,
+              altitudeAccuracy: 0,
+              headingAccuracy: 0,
+            );
+          });
+        }
+      } catch (error) {
+        debugPrint('Could not resolve saved user area: $error');
+      }
+    }
   }
 
   // Get the logged-in user's information from Firestore
@@ -106,6 +184,42 @@ class _HomeScreenState extends State<HomeScreen> {
           _fullName = data['name'] ?? 'User';
           _area = data['area'] ?? data['location'] ?? 'Your area';
           _role = data['role'] ?? 'findWork';
+          if (_userPosition == null && data['latitude'] != null && data['longitude'] != null) {
+            final lat = (data['latitude'] as num).toDouble();
+            final lng = (data['longitude'] as num).toDouble();
+            _userPosition = Position(
+              latitude: lat,
+              longitude: lng,
+              timestamp: DateTime.now(),
+              accuracy: 0,
+              altitude: 0,
+              heading: 0,
+              speed: 0,
+              speedAccuracy: 0,
+              altitudeAccuracy: 0,
+              headingAccuracy: 0,
+            );
+          } else if (_userPosition == null && _area.isNotEmpty && _area != 'Your area') {
+            // Geocode user saved area as immediate fallback
+            Geocoding().locationFromAddress(_area).then((locs) {
+              if (locs.isNotEmpty && mounted && _userPosition == null) {
+                setState(() {
+                  _userPosition = Position(
+                    latitude: locs.first.latitude,
+                    longitude: locs.first.longitude,
+                    timestamp: DateTime.now(),
+                    accuracy: 0,
+                    altitude: 0,
+                    heading: 0,
+                    speed: 0,
+                    speedAccuracy: 0,
+                    altitudeAccuracy: 0,
+                    headingAccuracy: 0,
+                  );
+                });
+              }
+            }).catchError((_) {});
+          }
           _isVerified = data['isVerified'] == true;
           _profileImageUrl = (data['profileImageUrl'] ??
                   data['photoUrl'] ??
@@ -144,46 +258,95 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location services are disabled. Please enable them in settings.')),
+          );
+        }
         return;
       }
-    }
 
-    if (permission == LocationPermission.deniedForever) {
-      return;
-    }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                permission == LocationPermission.deniedForever
+                    ? 'Location permission is permanently denied. Please enable it in app settings.'
+                    : 'Location permission is denied.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
 
-    Position position = await Geolocator.getCurrentPosition();
-    List<Placemark> placemarks = await Geocoding().placemarkFromCoordinates(position.latitude, position.longitude);
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      var newArea = '';
+      try {
+        final placemarks = await Geocoding().placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          newArea =
+              '${placemarks[0].locality ?? ''}, ${placemarks[0].country ?? ''}'
+                  .trim();
+        }
+      } catch (error) {
+        debugPrint('Could not resolve address for current location: $error');
+      }
+      if (newArea.isEmpty || newArea == ',') {
+        newArea =
+            '${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
+      }
 
-    if (placemarks.isNotEmpty) {
-      Placemark place = placemarks[0];
-      String newArea = '${place.locality}, ${place.country}';
-      
-      User? user = _auth.currentUser;
-      if (user != null) {
-        await _firestore.collection('Users').doc(user.uid).update({
-          'area': newArea,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        });
+      if (mounted) {
         setState(() {
           _area = newArea;
+          _userPosition = position;
         });
       }
+
+      User? user = _auth.currentUser;
+      if (user != null) {
+        try {
+          await _firestore.collection('Users').doc(user.uid).set({
+            'area': newArea,
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+          }, SetOptions(merge: true));
+        } catch (error) {
+          debugPrint('Could not save current location: $error');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not save location to your profile.')),
+            );
+          }
+        }
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (error) {
+      debugPrint('Could not update current location: $error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error getting location: $error')),
+        );
+      }
     }
-    if (mounted) Navigator.pop(context);
   }
 
   void _showLocationBottomSheet() {
@@ -229,17 +392,55 @@ class _HomeScreenState extends State<HomeScreen> {
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.check, color: Color(0xFF1976D2)),
                     onPressed: () async {
-                      if (locationController.text.isNotEmpty) {
+                      final text = locationController.text.trim();
+                      if (text.isNotEmpty) {
                         User? user = _auth.currentUser;
                         if (user != null) {
-                          await _firestore.collection('Users').doc(user.uid).update({
-                            'area': locationController.text,
-                          });
-                          setState(() {
-                            _area = locationController.text;
-                          });
+                          double? lat;
+                          double? lng;
+                          try {
+                            final locs = await Geocoding().locationFromAddress(text);
+                            if (locs.isNotEmpty) {
+                              lat = locs.first.latitude;
+                              lng = locs.first.longitude;
+                            }
+                          } catch (_) {}
+
+                          final Map<String, dynamic> updateData = {
+                            'area': text,
+                            'location': text,
+                          };
+                          if (lat != null && lng != null) {
+                            updateData['latitude'] = lat;
+                            updateData['longitude'] = lng;
+                          }
+
+                          await _firestore.collection('Users').doc(user.uid).set(
+                            updateData,
+                            SetOptions(merge: true),
+                          );
+
+                          if (lat != null && lng != null) {
+                            _userPosition = Position(
+                              latitude: lat,
+                              longitude: lng,
+                              timestamp: DateTime.now(),
+                              accuracy: 0,
+                              altitude: 0,
+                              heading: 0,
+                              speed: 0,
+                              speedAccuracy: 0,
+                              altitudeAccuracy: 0,
+                              headingAccuracy: 0,
+                            );
+                          }
                         }
-                        if (mounted) Navigator.pop(context);
+                        if (mounted && context.mounted) {
+                          setState(() {
+                            _area = text;
+                          });
+                          Navigator.pop(context);
+                        }
                       }
                     },
                   ),
@@ -727,6 +928,7 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               final allDocs = snapshot.data?.docs ?? [];
+              _resolveMissingTaskCoordinates(allDocs);
 
               // ── Client-side filtering ──────────────────────────
               final filtered = allDocs.where((doc) {
@@ -737,8 +939,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     (data['description'] ?? '').toString().toLowerCase();
                 final category =
                     (data['category'] ?? '').toString();
-                final taskLat = data['latitude'] as double?;
-                final taskLng = data['longitude'] as double?;
+                final cached = _taskCoordCache[doc.id];
+                final taskLat = (data['latitude'] as num?)?.toDouble() ?? cached?[0];
+                final taskLng = (data['longitude'] as num?)?.toDouble() ?? cached?[1];
 
                 // 1. Keyword search
                 if (_exploreSearchQuery.isNotEmpty &&
@@ -755,10 +958,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 // 3. Radius filter
                 if (_exploreRadiusKm != null) {
-                  if (_userPosition == null ||
-                      taskLat == null ||
-                      taskLng == null) {
-                    // Exclude tasks without coordinates when radius filter active
+                  if (_userPosition == null) {
+                    // Radius filter is active but user position is not yet known
+                    return false;
+                  }
+                  if (taskLat == null || taskLng == null) {
                     return false;
                   }
                   final distM = Geolocator.distanceBetween(
@@ -772,6 +976,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 return true;
               }).toList();
+
+              // Sort filtered tasks by distance from user (closest first)
+              if (_userPosition != null) {
+                filtered.sort((a, b) {
+                  final dataA = a.data() as Map<String, dynamic>;
+                  final dataB = b.data() as Map<String, dynamic>;
+                  final cachedA = _taskCoordCache[a.id];
+                  final cachedB = _taskCoordCache[b.id];
+                  final latA = (dataA['latitude'] as num?)?.toDouble() ?? cachedA?[0];
+                  final lngA = (dataA['longitude'] as num?)?.toDouble() ?? cachedA?[1];
+                  final latB = (dataB['latitude'] as num?)?.toDouble() ?? cachedB?[0];
+                  final lngB = (dataB['longitude'] as num?)?.toDouble() ?? cachedB?[1];
+
+                  final distA = (latA != null && lngA != null)
+                      ? Geolocator.distanceBetween(_userPosition!.latitude, _userPosition!.longitude, latA, lngA)
+                      : double.infinity;
+                  final distB = (latB != null && lngB != null)
+                      ? Geolocator.distanceBetween(_userPosition!.latitude, _userPosition!.longitude, latB, lngB)
+                      : double.infinity;
+
+                  return distA.compareTo(distB);
+                });
+              }
 
               if (filtered.isEmpty) {
                 return Center(
@@ -799,7 +1026,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           _exploreRadiusKm != null &&
                                   _userPosition == null
-                              ? 'Enable location permission to use radius filter.'
+                              ? 'Allow location access and enable location services to filter by radius.'
                               : 'Try adjusting your search or filters.',
                           textAlign: TextAlign.center,
                           style:
@@ -817,11 +1044,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemBuilder: (context, index) {
                   final doc = filtered[index];
                   final data = doc.data() as Map<String, dynamic>;
-                  final taskLat = data['latitude'] as double?;
-                  final taskLng = data['longitude'] as double?;
+                  final cached = _taskCoordCache[doc.id];
+                  final taskLat = (data['latitude'] as num?)?.toDouble() ?? cached?[0];
+                  final taskLng = (data['longitude'] as num?)?.toDouble() ?? cached?[1];
 
                   // Compute distance label if possible
-                  String distanceLabel = 'Nearby';
+                  String distanceLabel = 'Distance unavailable';
                   if (_userPosition != null &&
                       taskLat != null &&
                       taskLng != null) {
@@ -1021,6 +1249,28 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  void _resolveMissingTaskCoordinates(List<QueryDocumentSnapshot> docs) {
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final lat = (data['latitude'] as num?)?.toDouble();
+      final lng = (data['longitude'] as num?)?.toDouble();
+      final locText = (data['location'] ?? '').toString().trim();
+      if ((lat == null || lng == null) && locText.isNotEmpty && !_taskCoordCache.containsKey(doc.id)) {
+        Geocoding().locationFromAddress(locText).then((locs) {
+          if (locs.isNotEmpty) {
+            _taskCoordCache[doc.id] = [locs.first.latitude, locs.first.longitude];
+            // Auto backfill in Firestore if possible
+            FirebaseFirestore.instance.collection('Tasks').doc(doc.id).update({
+              'latitude': locs.first.latitude,
+              'longitude': locs.first.longitude,
+            }).catchError((_) {});
+            if (mounted) setState(() {});
+          }
+        }).catchError((_) {});
+      }
+    }
   }
 
   Widget _buildRadiusDropdown() {
@@ -2278,17 +2528,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomNavigationBar(bool isWorker) {
-    return NavigationBar(
+  return NavigationBarTheme(
+    data: NavigationBarThemeData(
+      labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) {
+        final isSelected = states.contains(WidgetState.selected);
+        return TextStyle(
+          fontSize: 11, // Reduced from default 12 to fit 5 items cleanly
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          color: isSelected ? const Color(0xFF1976D2) : Colors.black87,
+          overflow: TextOverflow.ellipsis,
+        );
+      }),
+    ),
+    child: NavigationBar(
       selectedIndex: _selectedIndex,
       onDestinationSelected: _onBottomNavTapped,
       backgroundColor: Colors.white,
       elevation: 5,
       indicatorColor: const Color(0xFFE3F2FD),
       height: 70,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       destinations: [
-        NavigationDestination(
-          icon: const Icon(Icons.home_outlined),
-          selectedIcon: const Icon(
+        const NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(
             Icons.home_rounded,
             color: Color(0xFF1976D2),
           ),
@@ -2316,27 +2579,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 : Icons.add_task_rounded,
             color: const Color(0xFF1976D2),
           ),
-          label: isWorker ? 'Applications' : 'My Tasks',
+          label: isWorker ? 'Applications' : 'My Tasks', // Option A: 'Applied' or Option B: keep 'Applications'
         ),
 
-        NavigationDestination(
-          icon: const Icon(Icons.chat_bubble_outline_rounded),
-          selectedIcon: const Icon(
+        const NavigationDestination(
+          icon: Icon(Icons.chat_bubble_outline_rounded),
+          selectedIcon: Icon(
             Icons.chat_bubble_rounded,
             color: Color(0xFF1976D2),
           ),
           label: 'Messages',
         ),
 
-        NavigationDestination(
-          icon: const Icon(Icons.person_outline_rounded),
-          selectedIcon: const Icon(
+        const NavigationDestination(
+          icon: Icon(Icons.person_outline_rounded),
+          selectedIcon: Icon(
             Icons.person_rounded,
             color: Color(0xFF1976D2),
           ),
           label: 'Profile',
         ),
       ],
-    );
+     ),
+   );
   }
 }

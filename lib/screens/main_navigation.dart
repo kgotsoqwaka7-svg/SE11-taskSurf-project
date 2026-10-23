@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'task_provider_dashboard.dart';
-import '../screens/user_profile.dart'; // Ensure these paths match your structure
+import '../screens/conversations_screen.dart'; // Ensure correct path
+import '../screens/user_profile.dart'; 
 import '../screens/settings.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -13,41 +15,39 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
-  // List of the screens we just built, updated with a Messages placeholder
-  final List<Widget> _screens = [
-    const TaskProviderDashboard(),
-    const Center(child: Text('Messages Screen Coming Soon', style: TextStyle(fontSize: 18, color: Colors.grey))),
-    const UserProfileScreen(),
-    const SettingsScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+    final List<Widget> screens = [
+      const TaskProviderDashboard(),
+      ConversationsScreen(currentUserId: currentUserId),
+      const UserProfileScreen(),
+      const SettingsScreen(),
+    ];
+
     return Scaffold(
-      body: _screens[_currentIndex], // Shows the active screen
-      // Upgraded to NavigationBar to match your teammate's UI exactly
+      body: screens[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
           setState(() {
-            _currentIndex = index; // Changes the tab when clicked
+            _currentIndex = index;
           });
         },
         backgroundColor: Colors.white,
         elevation: 5,
-        indicatorColor: const Color(0xFFE3F2FD), // Teammate's light blue bubble
+        indicatorColor: const Color(0xFFE3F2FD),
         height: 70,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(
               Icons.dashboard_rounded,
-              color: Color(0xFF1976D2), // Teammate's primary dark blue
+              color: Color(0xFF1976D2),
             ),
             label: 'Dashboard',
           ),
-          
-          // Added the exact Messages icon block from homeScreen.dart
           NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline_rounded),
             selectedIcon: Icon(
@@ -56,7 +56,6 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             label: 'Messages',
           ),
-
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
             selectedIcon: Icon(
@@ -65,7 +64,6 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             label: 'Profile',
           ),
-          
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(

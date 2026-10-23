@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 class PostTaskScreen extends StatefulWidget {
   final String? taskId;
@@ -34,6 +36,9 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
 
   String? _selectedCategory;
   bool _isLoading = false;
+  bool _isLocating = false;
+  double? _taskLatitude;
+  double? _taskLongitude;
 
   final List<Map<String, dynamic>> _categories = [
     {'name': 'Cleaning', 'icon': Icons.cleaning_services_outlined},
@@ -60,6 +65,10 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       _collectionController.text = widget.existingData!['collectionAddress'] ?? '';
       _deliveryController.text = widget.existingData!['deliveryAddress'] ?? '';
       _selectedCategory = widget.existingData!['category'];
+      if (widget.existingData!['latitude'] != null) _taskLatitude = (widget.existingData!['latitude'] as num).toDouble();
+      if (widget.existingData!['longitude'] != null) _taskLongitude = (widget.existingData!['longitude'] as num).toDouble();
+    } else {
+      _fillCurrentLocation();
     }
   }
 
@@ -75,6 +84,142 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
     _collectionController.dispose();
     _deliveryController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fillCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always) {
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      var text = '';
+      try {
+        final placemarks = await Geocoding().placemarkFromCoordinates(
+          pos.latitude,
+          pos.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          text = [
+            placemarks[0].subLocality,
+            placemarks[0].locality,
+            placemarks[0].administrativeArea,
+          ].where((part) => part != null && part.isNotEmpty).join(', ');
+        }
+      } catch (error) {
+        debugPrint('Could not resolve address for task location: $error');
+      }
+      if (mounted) {
+        setState(() {
+          _locationController.text = text.isNotEmpty
+              ? text
+              : '${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)}';
+          _taskLatitude = pos.latitude;
+          _taskLongitude = pos.longitude;
+        });
+      }
+    } catch (error) {
+      debugPrint('Could not fill task location from device: $error');
+    }
+  }
+
+  Future<void> _useCurrentLocationExplicit() async {
+    setState(() => _isLocating = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location services are disabled. Please enable them in settings.')),
+          );
+        }
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permissions are denied.')),
+            );
+          }
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are permanently denied. Please enable them in app settings.')),
+          );
+        }
+        return;
+      }
+
+      Position pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      String text = '';
+      try {
+        final placemarks = await Geocoding().placemarkFromCoordinates(
+          pos.latitude,
+          pos.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final p = placemarks[0];
+          final parts = [
+            p.subLocality,
+            p.locality,
+            p.administrativeArea,
+          ].where((part) => part != null && part.isNotEmpty).toList();
+          text = parts.isNotEmpty
+              ? parts.join(', ')
+              : '${p.locality ?? ''}, ${p.country ?? ''}';
+        }
+      } catch (error) {
+        debugPrint('Could not resolve address for task location: $error');
+      }
+      if (text.isEmpty) {
+        text = '${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)}';
+      }
+
+      if (mounted) {
+        setState(() {
+          _locationController.text = text;
+          _taskLatitude = pos.latitude;
+          _taskLongitude = pos.longitude;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error getting location: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
   }
 
   Future<void> _selectDate() async {
@@ -102,7 +247,11 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       });
     }
   }
-
+   /// Validates the form and submits the task data to Firestore.
+  /// This function handles:
+  /// 1. Geocoding fallback: If exact coordinates aren't set via GPS, it attempts to resolve the typed text into coordinates.
+  /// 2. Conditional Fields: Only attaches collection/delivery addresses if the task category is 'Delivery'.
+  /// 3. Upsert Logic: Updates an existing document if a `taskId` is provided; otherwise, generates a new document ID and creates a new task.
   Future<void> _submitTask() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory == null) {
@@ -116,7 +265,19 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) throw Exception('User not logged in');
 
-      final taskData = {
+      double? lat = _taskLatitude;
+      double? lng = _taskLongitude;
+      if (lat == null || lng == null) {
+        try {
+          List<Location> locs = await Geocoding().locationFromAddress(_locationController.text.trim());
+          if (locs.isNotEmpty) {
+            lat = locs.first.latitude;
+            lng = locs.first.longitude;
+          }
+        } catch (_) {}
+      }
+
+      final Map<String, dynamic> taskData = {
         'creatorID': currentUser.uid,
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
@@ -128,6 +289,10 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
         'date': _dateController.text.trim(),
         'time': _timeController.text.trim(),
       };
+      if (lat != null && lng != null) {
+        taskData['latitude'] = lat;
+        taskData['longitude'] = lng;
+      }
 
       // Only save delivery addresses if it is a delivery task
       if (_selectedCategory == 'Delivery') {
@@ -314,7 +479,26 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
               _buildLabel('LOCATION (General Area) *'),
               TextFormField(
                 controller: _locationController,
-                decoration: _inputDecoration('e.g. Bellville, Cape Town'),
+                onChanged: (val) {
+                  _taskLatitude = null;
+                  _taskLongitude = null;
+                },
+                decoration: _inputDecoration('e.g. Bellville, Cape Town').copyWith(
+                  suffixIcon: _isLocating
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: themeColor),
+                          ),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.my_location, color: themeColor),
+                          tooltip: 'Use current location',
+                          onPressed: _useCurrentLocationExplicit,
+                        ),
+                ),
                 validator: (val) => val == null || val.isEmpty ? 'Location is required' : null,
               ),
               const SizedBox(height: 20),

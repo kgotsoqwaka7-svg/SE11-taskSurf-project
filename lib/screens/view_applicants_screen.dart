@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import 'review_screen.dart'; 
+import 'chat_screen.dart';
 
 class ViewApplicationsScreen extends StatelessWidget {
   final String taskId; 
@@ -262,6 +264,33 @@ class ViewApplicationsScreen extends StatelessWidget {
                              );
                            }
                         },
+                        onMessage: () async {
+                           final currentUser = FirebaseAuth.instance.currentUser;
+                           if (currentUser == null) return;
+
+                           String taskTitle = 'Task';
+                           final taskDoc = await FirebaseFirestore.instance.collection('Tasks').doc(taskId).get();
+                           if (taskDoc.exists && taskDoc.data() != null) {
+                             taskTitle = taskDoc.data()!['title'] ?? 'Task';
+                           }
+
+                           if (context.mounted) {
+                             Navigator.push(
+                               context,
+                               MaterialPageRoute(
+                                 builder: (context) => ChatScreen(
+                                   taskId: taskId,
+                                   taskTitle: taskTitle,
+                                   providerId: currentUser.uid, 
+                                   providerName: currentUser.displayName ?? 'Job Provider',
+                                   seekerId: workerId, 
+                                   seekerName: liveName, 
+                                   currentUserId: currentUser.uid, 
+                                 ),
+                               ),
+                             );
+                           }
+                        },
                         onReject: () {
                           showDialog(
                             context: context,
@@ -322,11 +351,12 @@ class ApplicationCard extends StatelessWidget {
   final VoidCallback onRate;
   final VoidCallback onReject;
   final VoidCallback onAccept;
+  final VoidCallback onMessage; 
 
   const ApplicationCard({
     super.key, required this.name, required this.rating, required this.reviews, required this.distance, required this.price,
     required this.applied, required this.description, required this.skills, required this.isAccepted, required this.isVerified,
-    required this.profilePic, required this.onViewProfile, required this.onRate, required this.onReject, required this.onAccept,
+    required this.profilePic, required this.onViewProfile, required this.onRate, required this.onReject, required this.onAccept, required this.onMessage,
   });
 
   @override
@@ -438,7 +468,7 @@ class ApplicationCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () {}, 
+                          onPressed: onMessage, // Fixed: triggers navigation
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1976D2), foregroundColor: Colors.white, elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)), padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 0),
